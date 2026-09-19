@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+node_modules/
+coverage/
+test-results/
+playwright-report/
+*.log
+.DS_Store
+
+dist/
+.sites-runtime/
+*.tgz
