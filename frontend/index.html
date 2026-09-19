@@ -25,19 +25,22 @@
     <main class="workspace">
       <aside class="network-panel panel" aria-labelledby="network-heading">
         <div class="panel-heading"><div><p class="eyebrow">01 / THE NETWORK</p><h1 id="network-heading">Service overview</h1></div><span class="small-icon" aria-hidden="true">↗</span></div>
-        <p class="panel-intro">Choose a line to explore its route.</p>
+        <p class="panel-intro">See the network together. Choose a line for stations and arrivals.</p>
         <div id="mode-filters" class="mode-filters" aria-label="Filter lines by transport mode"></div>
-        <label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="line-search" type="search" placeholder="Find a line" aria-label="Find a line" autocomplete="off" /></label>
+        <label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="line-search" type="search" placeholder="Search the line list" aria-label="Search the line list" autocomplete="off" /></label>
         <div class="list-heading"><span>LINES</span><span id="line-count">—</span></div>
         <div id="line-list" class="line-list"><div class="empty-state"><span class="spinner" aria-hidden="true"></span><p>Loading the network…</p></div></div>
         <div class="panel-footnote"><span id="network-health" class="health-dot"></span><span id="network-updated">Connecting to data service</span></div>
       </aside>
 
       <section class="map-panel" aria-labelledby="route-title">
-        <div class="route-heading"><div><p class="eyebrow">02 / EXPLORE THE ROUTE</p><h2 id="route-title">London’s rail network</h2><p id="route-subtitle">Select a line to see stations and connections.</p></div><span id="route-color" class="route-color" aria-hidden="true"></span></div>
+        <div class="route-heading"><div><p class="eyebrow">02 / EXPLORE THE NETWORK</p><h2 id="route-title">London’s rail network</h2><p id="route-subtitle">Select a line to see stations and connections.</p></div><span id="route-color" class="route-color" aria-hidden="true"></span></div>
+        <div class="map-toolbar"><div id="map-view-controls" class="map-view-controls" role="group" aria-label="Map view"><button type="button" data-view="network" aria-pressed="true">Network map</button><button type="button" data-view="line" aria-pressed="false">Selected line</button></div></div>
+        <div id="network-progress" class="network-progress"><span id="network-progress-text">Loading network routes…</span><button id="retry-network" type="button" class="text-button" hidden>Retry missing routes</button></div>
         <div id="route-status" class="route-status" hidden></div>
-        <div class="map-wrap"><div id="map" aria-label="Selected line route map. The adjacent station list provides keyboard access to every station."></div><div id="map-loading" class="map-message"><span class="spinner" aria-hidden="true"></span><span>Preparing your map…</span></div><div id="tile-notice" class="tile-notice" hidden>Street map unavailable. Route and station markers remain usable.</div><div class="map-label"><span class="map-label-dot"></span><span id="map-caption">SELECT A LINE TO GET STARTED</span></div></div>
-        <div class="map-footer"><span><span class="legend-station"></span>Station</span><span><span class="legend-selected"></span>Selected station</span><button id="fit-route" class="text-button" type="button" disabled>Fit route <span aria-hidden="true">↗</span></button></div>
+        <div class="map-wrap"><div id="map" aria-label="Rail network map. Select a line to reveal stations. The line and station lists provide keyboard access."></div><div id="map-loading" class="map-message"><span class="spinner" aria-hidden="true"></span><span>Preparing your map…</span></div><div id="tile-notice" class="tile-notice" hidden>Street map unavailable. Route and station markers remain usable.</div><div class="map-label"><span class="map-label-dot"></span><span id="map-caption">NETWORK VIEW</span></div></div>
+        <div class="map-footer"><span><span class="legend-station"></span>Line stations</span><span><span class="legend-selected"></span>Selected station</span><button id="fit-route" class="text-button" type="button" disabled>Fit network <span aria-hidden="true">↗</span></button></div>
+        <p class="map-coverage">Tube, DLR, Overground, Elizabeth line and Thameslink. Other National Rail operators are not yet included. Routes show network coverage; services vary by time and day.</p>
       </section>
 
       <aside class="station-panel panel" aria-label="Stations and arrivals">

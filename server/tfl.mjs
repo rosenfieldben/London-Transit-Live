@@ -5,6 +5,7 @@ export const MODES = [
   { id: 'dlr', name: 'DLR' },
   { id: 'overground', name: 'Overground' },
   { id: 'elizabeth-line', name: 'Elizabeth line' },
+  { id: 'national-rail', name: 'Thameslink' },
 ];
 export const ATTRIBUTION = 'Powered by TfL Open Data. Independent project; not affiliated with Transport for London.';
 export const COLORS = {
@@ -14,6 +15,7 @@ export const COLORS = {
   dlr: '#00A4A7', 'elizabeth': '#6950A1', 'elizabeth-line': '#6950A1',
   lioness: '#FAA61A', mildmay: '#0077AD', windrush: '#E42313', weaver: '#9B0058',
   suffragette: '#5BBD72', liberty: '#61686B', 'london-overground': '#EE7C0E',
+  thameslink: '#C91475',
 };
 const modeIds = new Set(MODES.map(mode => mode.id));
 export const safeId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9-]{0,79}$/.test(value);
@@ -23,7 +25,8 @@ const iso = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val
 
 export function normalizeLines(raw) {
   if (!Array.isArray(raw)) throw new HttpError(502, 'TfL returned an unexpected line response.');
-  const lines = raw.filter(line => safeId(line?.id) && modeIds.has(line.modeName)).map(line => ({
+  const lines = raw.filter(line => safeId(line?.id) && modeIds.has(line.modeName)
+    && (line.modeName !== 'national-rail' || line.id === 'thameslink')).map(line => ({
     id: line.id, name: clean(line.name, line.id), mode: line.modeName,
     color: COLORS[line.id] || '#687C92',
     statuses: array(line.lineStatuses).map(status => ({
@@ -80,7 +83,7 @@ export function normalizeRoute(raw, line) {
 
 export function normalizeArrivals(raw, line, now = Date.now()) {
   if (!Array.isArray(raw)) throw new HttpError(502, 'TfL returned an unexpected arrivals response.');
-  const rail = line.mode === 'overground' || line.mode === 'elizabeth-line';
+  const rail = ['overground', 'elizabeth-line', 'national-rail'].includes(line.mode);
   const arrivals = [];
   for (const [index, arrival] of raw.entries()) {
     if (!arrival || typeof arrival !== 'object') continue;
@@ -123,7 +126,7 @@ export class TflService {
     this.diagnostics = diagnostics;
     this.now = now;
     this.cache = cache;
-    this.upstream = new TokenBucket({ now, capacity: 20, perMinute: 60 });
+    this.upstream = new TokenBucket({ now, capacity: 32, perMinute: 60 });
     this.backoffUntil = 0;
   }
 
@@ -200,7 +203,7 @@ export class TflService {
     return this.cache.get(`arrivals:${line.id}:${stationId}`, {
       ttl: 20_000, maxStale: 60_000,
       load: async () => {
-        const rail = line.mode === 'overground' || line.mode === 'elizabeth-line';
+        const rail = ['overground', 'elizabeth-line', 'national-rail'].includes(line.mode);
         const raw = await this.request(`/StopPoint/${stationId}/${rail ? 'ArrivalDepartures' : 'Arrivals'}`, rail ? { lineIds: line.id } : {});
         return normalizeArrivals(raw, line, this.now());
       },

@@ -1,17 +1,97 @@
 import { londonTime, isStale, isPredictionStale, currentPredictions, arrivalTiming, lineCondition, safeColor, escapeHTML as e } from './lib.mjs';
+import { RouteStore, visibleLines, networkSummary } from './network.mjs';
 
 const $ = id => document.getElementById(id);
-const state = { config: null, lines: [], linesEnvelope: null, mode: 'all', lineId: null, route: null, routeEnvelope: null, stationId: null, arrivals: null, lineSearch: '', stationSearch: '', routeLoading: false, arrivalLoading: false, routeError: '', arrivalError: '', lineError: '', routeSeq: 0, arrivalSeq: 0, lineSeq: 0, routeController: null, arrivalController: null, demo: false };
-const modeNames = { tube: 'Underground', dlr: 'DLR', overground: 'Overground', 'elizabeth-line': 'Elizabeth line', tram: 'Tram' };
-let map, routeLayers, tileFailures = 0;
+const state = { config: null, lines: [], linesEnvelope: null, mode: 'all', lineId: null, route: null, routeEnvelope: null, stationId: null, arrivals: null, lineSearch: '', stationSearch: '', routeLoading: false, arrivalLoading: false, routeError: '', arrivalError: '', lineError: '', routeSeq: 0, arrivalSeq: 0, lineSeq: 0, arrivalController: null, demo: false, mapView: 'network', networkRoutes: new Map(), networkErrors: new Map(), networkPending: new Set() };
+const modeNames = { tube: 'Underground', dlr: 'DLR', overground: 'Overground', 'elizabeth-line': 'Elizabeth line', 'national-rail': 'Thameslink', tram: 'Tram' };
+let map, routeLayers, networkLayers, tileFailures = 0;
 const markers = new Map();
 
 async function request(url, signal) {
   const response = await fetch(url, { signal, headers: { Accept: 'application/json' }, cache: 'no-store' });
-  if (!response.ok) throw new Error(`The data service returned ${response.status}. Please try again.`);
-  const result = await response.json();
+  const result = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(typeof result?.error === 'string' ? result.error.slice(0, 300) : `The data service returned ${response.status}. Please try again.`);
   if (!result || typeof result !== 'object') throw new Error('The data service returned an unreadable response.');
   return result;
+}
+
+const routes = new RouteStore(async id => {
+  const result = await request(`/api/lines/${encodeURIComponent(id)}/route`);
+  if (!result.data || !Array.isArray(result.data.stations) || !Array.isArray(result.data.paths)) throw new Error('Route information is unavailable.');
+  return result;
+});
+
+function mappedLines() { return visibleLines(state.lines, state.mode); }
+
+function renderNetworkProgress() {
+  const summary = networkSummary(mappedLines(), state.networkRoutes, state.networkErrors);
+  const loading = mappedLines().some(item => state.networkPending.has(item.id));
+  $('network-progress').hidden = state.mapView !== 'network';
+  $('network-progress-text').textContent = `${summary.loaded} of ${summary.total} routes loaded${loading ? ' · Loading…' : ''}${summary.failed ? ` · ${summary.failed} unavailable` : ''}${summary.stale ? ` · ${summary.stale} saved routes` : ''}`;
+  $('retry-network').hidden = !summary.failed;
+  $('retry-network').disabled = loading;
+  if (state.mapView === 'network') {
+    $('map-loading').hidden = Boolean(summary.loaded) || !summary.total;
+    if (!summary.loaded && summary.total) $('map-loading').innerHTML = loading
+      ? '<span class="spinner" aria-hidden="true"></span><span>Loading network routes…</span>'
+      : empty('Network routes are unavailable.', 'Use Retry missing routes above to reconnect.');
+    $('fit-route').disabled = !networkLayers?.getLayers().length;
+  }
+}
+
+function ensureNetworkRoutes(retry = false) {
+  for (const item of mappedLines()) {
+    if (state.networkPending.has(item.id) || routes.peek(item.id) || (!retry && state.networkErrors.has(item.id))) continue;
+    state.networkPending.add(item.id);
+    state.networkErrors.delete(item.id);
+    routes.get(item.id).then(result => {
+      state.networkRoutes.set(item.id, result); state.networkErrors.delete(item.id); noteSource(result);
+    }).catch(error => {
+      state.networkErrors.set(item.id, error.message);
+      const saved = state.networkRoutes.get(item.id);
+      if (saved) state.networkRoutes.set(item.id, { ...saved, stale: true });
+    }).finally(() => {
+      state.networkPending.delete(item.id);
+      if (state.mapView === 'network') { drawNetwork(); renderNetworkProgress(); }
+    });
+  }
+  renderNetworkProgress();
+}
+
+function drawNetwork() {
+  if (!map || !networkLayers) return;
+  networkLayers.clearLayers();
+  if (state.mapView !== 'network') return;
+  for (const item of mappedLines().sort((a, b) => Number(a.id === state.lineId) - Number(b.id === state.lineId))) {
+    const envelope = state.networkRoutes.get(item.id);
+    for (const path of envelope?.data.paths || []) {
+      if (path.length < 2) continue;
+      const selected = item.id === state.lineId;
+      L.polyline(path, { color: '#fff', weight: selected ? 7 : 5, opacity: .75, interactive: false }).addTo(networkLayers);
+      const layer = L.polyline(path, { color: safeColor(item.color), weight: selected ? 4 : 2.5, opacity: state.lineId && !selected ? .65 : .9 }).addTo(networkLayers);
+      const label = document.createElement('span'); label.textContent = `${item.name}${envelope.stale ? ' · saved route' : ''}`;
+      layer.bindTooltip(label, { sticky: true });
+      layer.on('click', () => selectLine(item.id));
+    }
+  }
+  $('fit-route').disabled = !networkLayers.getLayers().length;
+}
+
+function setMapView(view) {
+  if (view === state.mapView) return;
+  state.mapView = view;
+  [...$('map-view-controls').querySelectorAll('button')].forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === view)));
+  $('fit-route').textContent = view === 'network' ? 'Fit network ↗' : 'Fit line ↗';
+  if (networkLayers) { if (view === 'network') networkLayers.addTo(map); else networkLayers.remove(); }
+  renderRouteHeading();
+  if (view === 'network') { ensureNetworkRoutes(); drawNetwork(); renderNetworkProgress(); }
+  else {
+    renderNetworkProgress();
+    $('map-loading').hidden = Boolean(state.route);
+    if (!state.route) $('map-loading').innerHTML = state.routeLoading ? empty('Loading route and stations…') : state.routeError ? empty('The route could not be loaded.', state.routeError, 'route') : empty('Choose a line.', 'Select a line from the service overview.');
+    $('fit-route').disabled = !routeLayers?.getLayers().length;
+  }
+  fitRoute();
 }
 
 function announce(message) { $('announcer').textContent = message; }
@@ -32,9 +112,10 @@ function empty(message, detail = '', retry = '') {
 }
 
 function clearSelection() {
-  state.routeController?.abort(); state.arrivalController?.abort();
+  state.arrivalController?.abort();
   ++state.routeSeq; ++state.arrivalSeq;
-  Object.assign(state, { lineId: null, route: null, routeEnvelope: null, stationId: null, arrivals: null, routeLoading: false, arrivalLoading: false, routeError: '', arrivalError: '' });
+  Object.assign(state, { lineId: null, route: null, routeEnvelope: null, stationId: null, arrivals: null, routeLoading: false, arrivalLoading: false, routeError: '', arrivalError: '', stationSearch: '' });
+  $('station-search').value = '';
   routeLayers?.clearLayers(); markers.clear();
   $('fit-route').disabled = true;
   $('route-title').textContent = 'London’s rail network';
@@ -44,11 +125,12 @@ function clearSelection() {
   $('map-loading').hidden = false;
   $('map-loading').innerHTML = empty('No lines are currently reported.', 'The network will refresh automatically.');
   renderStations(); renderArrivals();
+  if (state.mapView === 'network') { drawNetwork(); renderRouteHeading(); renderNetworkProgress(); }
 }
 
 function renderModes() {
   const modes = state.config?.modes?.length ? state.config.modes : [...new Set(state.lines.map(item => item.mode))].map(id => ({ id, name: modeName(id) }));
-  $('mode-filters').innerHTML = [{ id: 'all', name: 'All rail' }, ...modes].map(mode => `<button type="button" class="mode-button" data-mode="${e(mode.id)}" aria-pressed="${state.mode === mode.id}">${e(mode.name)}</button>`).join('');
+  $('mode-filters').innerHTML = [{ id: 'all', name: 'All supported rail' }, ...modes].map(mode => `<button type="button" class="mode-button" data-mode="${e(mode.id)}" aria-pressed="${state.mode === mode.id}">${e(mode.name)}</button>`).join('');
 }
 
 function renderLines() {
@@ -71,19 +153,24 @@ function renderLines() {
 
 function renderRouteHeading() {
   const selected = line();
-  if (!selected) return;
+  if (state.mapView === 'network') {
+    $('route-title').textContent = 'London rail network';
+    $('route-subtitle').textContent = `${state.mode === 'all' ? 'All supported rail' : modeName(state.mode)} · Select a line to see its stations`;
+    $('map-caption').textContent = `${state.demo ? 'SAMPLE NETWORK' : 'NETWORK VIEW'}${selected ? ` / ${selected.name.toUpperCase()}` : ''}`;
+  }
+  if (!selected) { $('route-status').hidden = true; if (state.mapView === 'line') { $('route-title').textContent = 'Choose a line'; $('route-subtitle').textContent = 'Select a line from the service overview.'; $('map-caption').textContent = 'LINE VIEW'; } return; }
   const color = safeColor(selected.color);
   document.documentElement.style.setProperty('--line', color);
-  $('route-title').textContent = selected.name;
+  if (state.mapView === 'line') $('route-title').textContent = selected.name;
   const count = state.route?.stations?.length;
-  $('route-subtitle').textContent = `${modeName(selected.mode)}${count != null ? ` · ${count} stations` : ''}${state.routeEnvelope?.stale ? ' · Saved route' : ''}`;
+  if (state.mapView === 'line') $('route-subtitle').textContent = `${modeName(selected.mode)}${count != null ? ` · ${count} stations` : ''}${state.routeEnvelope?.stale ? ' · Saved route' : ''}`;
   const condition = lineCondition(selected);
   const stale = Boolean(state.lineError) || isStale(state.linesEnvelope, Date.now(), 150000);
   const reasons = [...new Set((selected.statuses || []).map(item => item.reason).filter(Boolean))];
   $('route-status').hidden = false;
   $('route-status').className = `route-status ${stale ? 'stale' : condition.type}`;
-  $('route-status').innerHTML = `<p><strong>${stale ? 'Saved status · ' : ''}${e(condition.text)}</strong>${state.demo ? ' <span>— sample data</span>' : ''}</p>${reasons.map(reason => `<p>${e(reason)}</p>`).join('')}${stale ? '<p>Status updates are unavailable or out of date.</p>' : ''}`;
-  $('map-caption').textContent = `${selected.name.toUpperCase()} / ${state.demo ? 'SAMPLE ROUTE' : 'ROUTE VIEW'}`;
+  $('route-status').innerHTML = `<p><strong>${e(selected.name)} · ${stale ? 'Saved status · ' : ''}${e(condition.text)}</strong>${state.demo ? ' <span>— sample data</span>' : ''}</p>${reasons.map(reason => `<p>${e(reason)}</p>`).join('')}${stale ? '<p>Status updates are unavailable or out of date.</p>' : ''}`;
+  if (state.mapView === 'line') $('map-caption').textContent = `${selected.name.toUpperCase()} / ${state.demo ? 'SAMPLE ROUTE' : 'ROUTE VIEW'}`;
 }
 
 async function loadLines(initial = false) {
@@ -99,7 +186,8 @@ async function loadLines(initial = false) {
     if (state.lineId && !state.lines.some(item => item.id === state.lineId)) clearSelection();
     if (initial) renderModes();
     renderLines();
-    if (!state.lineId && state.lines.length) {
+    if (state.mapView === 'network') { ensureNetworkRoutes(); drawNetwork(); }
+    if (!state.lineId && state.lines.length && state.mapView === 'line') {
       const candidates = state.mode === 'all' ? state.lines : state.lines.filter(item => item.mode === state.mode);
       const first = candidates.find(item => item.id === 'elizabeth') || candidates[0] || state.lines[0];
       if (state.mode !== 'all' && first.mode !== state.mode) { state.mode = 'all'; renderModes(); }
@@ -117,6 +205,7 @@ function initializeMap() {
   if (!window.L) { $('map').parentElement.classList.add('map-disabled'); $('map-loading').innerHTML = empty('Map unavailable.', 'You can still choose stations and view arrivals from the station list.'); return; }
   map = L.map('map', { zoomControl: true, scrollWheelZoom: false }).setView([51.5074, -0.1278], 11);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19 }).on('tileerror', () => { tileFailures++; if (tileFailures >= 2) $('tile-notice').hidden = false; }).addTo(map);
+  networkLayers = L.featureGroup().addTo(map);
   routeLayers = L.featureGroup().addTo(map);
   new ResizeObserver(() => map.invalidateSize({ animate: false })).observe($('map'));
 }
@@ -139,43 +228,50 @@ function drawRoute() {
     markers.set(stop.id, marker);
   }
   $('fit-route').disabled = !routeLayers.getLayers().length;
-  fitRoute();
+  if (state.mapView === 'line') fitRoute();
   $('map-loading').hidden = true;
-  if (!routeLayers.getLayers().length) { $('map-loading').hidden = false; $('map-loading').innerHTML = empty('No route geometry is available.', 'Use the station list to explore this line.'); }
+  if (state.mapView === 'line' && !routeLayers.getLayers().length) { $('map-loading').hidden = false; $('map-loading').innerHTML = empty('No route geometry is available.', 'Use the station list to explore this line.'); }
 }
 
 function stationIcon(selected) {
   return L.divIcon({ className: '', html: `<span class="station-marker${selected ? ' selected' : ''}" style="--marker-color:${safeColor(line()?.color)}"></span>`, iconSize: selected ? [18, 18] : [12, 12], iconAnchor: selected ? [9, 9] : [6, 6] });
 }
-function fitRoute() { if (map && routeLayers.getLayers().length) map.fitBounds(routeLayers.getBounds(), { padding: [35, 35], maxZoom: 14, animate: false }); }
+function fitRoute() {
+  const layers = state.mapView === 'network' ? networkLayers : routeLayers;
+  if (map && layers?.getLayers().length) map.fitBounds(layers.getBounds(), { padding: [35, 35], maxZoom: 14, animate: false });
+}
 
 async function selectLine(id) {
   if (id === state.lineId && !state.routeError) return;
-  state.routeController?.abort(); state.arrivalController?.abort();
+  state.arrivalController?.abort();
   const seq = ++state.routeSeq; ++state.arrivalSeq;
   state.lineId = id; state.route = null; state.routeEnvelope = null; state.stationId = null; state.arrivals = null; state.stationSearch = ''; state.routeLoading = true; state.arrivalLoading = false; state.routeError = ''; state.arrivalError = '';
   $('station-search').value = '';
   routeLayers?.clearLayers(); markers.clear(); $('fit-route').disabled = true;
   renderLines(); renderStations(); renderArrivals();
-  $('map-loading').hidden = false; $('map-loading').innerHTML = '<span class="spinner" aria-hidden="true"></span><span>Loading route and stations…</span>';
-  const controller = new AbortController(); state.routeController = controller;
+  if (state.mapView === 'line') { $('map-loading').hidden = false; $('map-loading').innerHTML = '<span class="spinner" aria-hidden="true"></span><span>Loading route and stations…</span>'; }
+  else { drawNetwork(); renderNetworkProgress(); }
   try {
-    const result = await request(`/api/lines/${encodeURIComponent(id)}/route`, controller.signal);
+    const result = await routes.get(id, { priority: true });
     if (seq !== state.routeSeq) return;
     if (!result.data || !Array.isArray(result.data.stations)) throw new Error('Station information is unavailable.');
     state.route = result.data; state.routeEnvelope = result; state.routeLoading = false;
+    state.networkRoutes.set(id, result); state.networkErrors.delete(id);
     noteSource(result); renderRouteHeading(); renderStations(); drawRoute();
+    if (state.mapView === 'network') { drawNetwork(); renderNetworkProgress(); }
     announce(`${line()?.name || 'Line'} selected. ${result.data.stations.length} stations available.`);
   } catch (error) {
     if (error.name === 'AbortError' || seq !== state.routeSeq) return;
     state.routeLoading = false; state.routeError = error.message || 'Unable to load the route.';
-    $('map-loading').innerHTML = empty('The route could not be loaded.', state.routeError, 'route'); renderStations(); announce('The route could not be loaded.');
+    if (state.mapView === 'line') $('map-loading').innerHTML = empty('The route could not be loaded.', state.routeError, 'route');
+    renderStations(); announce('The route could not be loaded.');
   }
 }
 
 function renderStations() {
   const stops = state.route?.stations || [];
   const filtered = stops.filter(stop => stop.name.toLowerCase().includes(state.stationSearch.toLowerCase()));
+  $('stations-heading').textContent = line() ? `${line().name} stations` : 'Stations';
   $('station-count').textContent = String(stops.length);
   $('station-search').disabled = state.routeLoading || !state.route;
   restoreFocus($('station-list'), 'station', () => {
@@ -258,14 +354,20 @@ $('mode-filters').addEventListener('click', event => {
   const button = event.target.closest('[data-mode]'); if (!button) return;
   state.mode = button.dataset.mode;
   [...$('mode-filters').children].forEach(item => item.setAttribute('aria-pressed', String(item.dataset.mode === state.mode)));
+  if (state.mapView === 'network') {
+    if (state.mode !== 'all' && line() && line().mode !== state.mode) clearSelection();
+    renderLines(); ensureNetworkRoutes(); drawNetwork(); renderNetworkProgress(); return;
+  }
   renderLines();
-  if (state.mode !== 'all' && line()?.mode !== state.mode) { const first = state.lines.find(item => item.mode === state.mode); if (first) selectLine(first.id); }
+  if (state.mode !== 'all' && line()?.mode !== state.mode) { const first = state.lines.find(item => item.mode === state.mode); if (first) selectLine(first.id); else clearSelection(); }
 });
 $('line-search').addEventListener('input', event => { state.lineSearch = event.target.value; renderLines(); });
 $('station-search').addEventListener('input', event => { state.stationSearch = event.target.value; renderStations(); });
 $('line-list').addEventListener('click', event => { const button = event.target.closest('[data-line]'); if (button) selectLine(button.dataset.line); });
 $('station-list').addEventListener('click', event => { const button = event.target.closest('[data-station]'); if (button) selectStation(button.dataset.station); });
 $('fit-route').addEventListener('click', fitRoute);
+$('map-view-controls').addEventListener('click', event => { const view = event.target.closest('[data-view]')?.dataset.view; if (view) setMapView(view); });
+$('retry-network').addEventListener('click', () => ensureNetworkRoutes(true));
 document.addEventListener('click', event => {
   const retry = event.target.closest('[data-retry]')?.dataset.retry;
   if (retry === 'lines') loadLines(true);

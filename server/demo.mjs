@@ -4,6 +4,13 @@ import { COLORS, safeId } from './tfl.mjs';
 // Handwritten illustrative samples. These are deliberately separate from TfL
 // adapters and are served only when DEMO_MODE=true or --demo is explicit.
 const definitions = [
+  ['thameslink', 'Thameslink', 'national-rail', [
+    ['910GSTPXBOX', 'St Pancras International (low level)', 51.532168, -0.127343],
+    ['910GFRNDNLT', 'Farringdon', 51.520167, -0.105205],
+    ['910GCTMSLNK', 'City Thameslink', 51.513936, -0.10359],
+    ['910GBLFR', 'Blackfriars', 51.51181, -0.103332],
+    ['910GLNDNBDC', 'London Bridge', 51.505019, -0.086092],
+  ]],
   ['central', 'Central', 'tube', [
     ['940GZZLUOXC', 'Oxford Circus', 51.5152, -0.1419],
     ['940GZZLUTCR', 'Tottenham Court Road', 51.5164, -0.1303],

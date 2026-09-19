@@ -17,15 +17,15 @@ was `49c595660365d51de10292407421438b22ccd429`.
 | GPS versus inferred/scheduled data are distinct | Predictions remain predictions; no invented vehicle coordinates |
 | Failed data and successful empty data mean different things | Label stale retained data; successful empty arrivals clear the board |
 | Stations have an accessible text surface | Line station search/list alongside the map |
-| Multiple operators have different contracts | Separate TfL prediction adapters; National Rail added independently later |
+| Multiple operators have different contracts | Separate TfL prediction adapters including Thameslink; wider National Rail later |
 
 ## Stage 1 — Validate and publish the rail foundation
 
 The included starter implements the first functional slice. Next:
 
-1. Create `london-transit-live` under the preferred GitHub account and commit the package.
-2. Add the owner's TfL app key as a host secret and connect a Node-capable host.
-3. Exercise representative Underground, DLR, Overground and Elizabeth line stations
+1. Completed: dedicated `rosenfieldben/London-Transit-Live` repository and private deployment.
+2. Completed: owner's TfL app key configured as a runtime secret; deployed status and route requests returned 200.
+3. Exercise representative Underground, DLR, Overground, Elizabeth line and Thameslink stations
    during operating hours. Confirm station IDs, branches, terminal departures,
    cancellations, empty boards, disruption reasons and timestamp behavior.
 4. Verify outbound and inbound branches on complex routes, especially Northern line,
@@ -38,8 +38,10 @@ an explicit unavailable/empty state; no stale or simulated values appear current
 
 ## Stage 2 — Make the map a network explorer
 
-Add multiple simultaneous line layers, station interchange grouping, broader station
-search, saved stations, step-free information with field-level provenance, and trams.
+Multiple simultaneous line layers and Thameslink are implemented, with network/line
+views, mode filters, partial-route recovery and shared geometry caching. Next add
+station interchange grouping, broader station search, saved stations, step-free
+information with field-level provenance, and trams.
 Keep station/platform identifiers separate; a station complex can contain different
 stop IDs for different operators and modes. Do not infer accessibility from a coordinate
 or a station name. Maintain an equally capable keyboard path.
@@ -50,8 +52,8 @@ misattributed arrivals, and map density remains usable on a phone.
 ## Stage 3 — Buses and National Rail
 
 For buses, begin with stop boards and selected routes to control request volume. Audit
-the actual location fields before promising GPS vehicle tracking. Add National Rail
-through its own official provider/credentials and attribution, with explicit coverage.
+the actual location fields before promising GPS vehicle tracking. Extend beyond the current Thameslink coverage to other National Rail operators
+through their official provider/credentials and attribution, with explicit coverage.
 Darwin predictions are not a universal vehicle-location feed.
 
 Acceptance: each provider can fail independently; keys remain server-side; station and

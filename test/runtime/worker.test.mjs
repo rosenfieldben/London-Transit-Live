@@ -16,6 +16,10 @@ test('built Worker requests and normalizes TfL data in the hosting runtime', asy
     },
   });
   t.after(() => runtime.dispose());
+  const module = await runtime.dispatchFetch('http://localhost/network.mjs');
+  assert.equal(module.status, 200);
+  assert.match(module.headers.get('content-type'), /javascript/);
+  assert.match(await module.text(), /class RouteStore/);
   const response = await runtime.dispatchFetch('http://localhost/api/lines');
   assert.equal(response.status, 200);
   const result = await response.json();
@@ -24,7 +28,7 @@ test('built Worker requests and normalizes TfL data in the hosting runtime', asy
   assert.equal(result.data[0].id, 'victoria');
   assert.equal(result.data[0].statuses[0].description, 'Good Service');
   assert.deepEqual(calls, [{
-    url: 'https://api.tfl.gov.uk/Line/Mode/tube,dlr,overground,elizabeth-line/Status',
+    url: 'https://api.tfl.gov.uk/Line/Mode/tube,dlr,overground,elizabeth-line,national-rail/Status',
     accept: 'application/json',
   }]);
 });

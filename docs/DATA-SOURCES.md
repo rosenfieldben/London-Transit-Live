@@ -2,7 +2,7 @@
 
 ## First provider: Transport for London
 
-The first release covers Greater London rail. TfL's Unified API supplies line status, stations, route geometry and station predictions. National Rail, buses, river services and cycle hire can be added independently later.
+The first release covers Greater London rail. TfL's Unified API supplies line status, stations, route geometry and station predictions. Thameslink is included through TfL; other National Rail operators, buses, river services and cycle hire can be added independently later.
 
 Official references:
 
@@ -19,14 +19,14 @@ All paths below are relative to `https://api.tfl.gov.uk`.
 
 | Feature | Endpoint | Handling |
 | --- | --- | --- |
-| Mode discovery | `/Line/Meta/Modes` | Rail mode IDs include `tube`, `dlr`, `overground`, `elizabeth-line`, `tram`. |
+| Mode discovery | `/Line/Meta/Modes` | Rail mode IDs include `tube`, `dlr`, `overground`, `elizabeth-line`, `national-rail`, `tram`. The app accepts only Thameslink from `national-rail`. |
 | Line discovery | `/Line/Mode/{modes}` | Discover provider IDs; mode and line IDs differ. Elizabeth line's mode is `elizabeth-line`, its line ID is `elizabeth`. |
 | Network status | `/Line/Mode/{modes}/Status` | Keep every status and disruption description; an unavailable response is not good service. |
 | Station search | `/StopPoint/Search?query={query}&modes={modes}` | Results can be interchange hubs requiring resolution to mode-specific stop IDs. |
 | Stations serving a line | `/Line/{id}/StopPoints` | Supplies stop IDs, coordinates, hierarchy and served lines. |
 | Network geometry | `/Line/{id}/Route/Sequence/all` | Parse each `lineStrings` string; retain branches and separate polylines. |
 | Tube/DLR predictions | `/StopPoint/{id}/Arrivals` | Normalize expected arrival, source time, expiry, destination and platform. |
-| Overground/Elizabeth rail board | `/StopPoint/{id}/ArrivalDepartures?lineIds={lineId}` | Separate response shape; preserve scheduled/estimated and arrival/departure distinctions. Also documented for Thameslink. |
+| Overground/Elizabeth/Thameslink board | `/StopPoint/{id}/ArrivalDepartures?lineIds={lineId}` | Separate response shape; preserve scheduled/estimated and arrival/departure distinctions. Thameslink uses line ID `thameslink` and mode `national-rail`. |
 
 The current six Overground line IDs were observed as `liberty`, `lioness`, `mildmay`, `suffragette`, `weaver` and `windrush`, all with mode `overground`. Old examples containing `london-overground` are not the current six-line registry.
 
@@ -82,3 +82,29 @@ Credit TfL visibly and link its Transport Data Service terms. Use independent pr
 2. Bus stop arrivals and route geometry using the same provider adapter; then river services and cycle-hire availability after endpoint checks.
 3. Wider National Rail coverage using [National Rail Darwin](https://www.nationalrail.co.uk/developers/darwin-data-feeds/) through [Rail Data Marketplace](https://raildata.org.uk/). The official page currently lists a JSON public departure-board API and requires National Rail attribution. Confirm product-specific access terms and quotas when subscribing.
 4. Journey planning, accessibility and historical reliability once the basic live-data behavior is dependable. Introduce inferred movement only with confidence/freshness rules and honest labelling.
+
+## Thameslink and the combined network map
+
+Verified on 19 September 2026 using the live TfL API:
+
+- `/Line/Mode/tube,dlr,overground,elizabeth-line,national-rail/Status` returned 44 lines.
+  The application retains the TfL rail modes and only `thameslink` from National Rail,
+  giving 20 supported lines in the observed response.
+- `/Line/thameslink/Status` returned a valid service status.
+- `/Line/thameslink/Route/Sequence/all` returned 26 path variants and 145 unique
+  normalized boarding stops. Coverage extended beyond London to destinations including
+  Brighton, Bedford, Peterborough and Cambridge. Variants may overlap and are not a
+  statement that every branch operates at the current time.
+- Blackfriars (`910GBLFR`) and Farringdon (`910GFRNDNLT`) rail boards returned 66 and 50
+  records respectively. Estimates, scheduled-only events, platforms, destinations,
+  delays and cancellations were observed. Counts vary over time.
+
+The existing server-side TfL key supports these endpoints; no second provider key is
+required for this Thameslink slice. Rail-board responses omit line IDs, so the adapter
+preserves the validated requested line. Scheduled-only times remain labelled as schedules.
+
+Network geometry is loaded once per browser cache lifetime, with at most two requests
+in flight and selected lines given priority. The shared provider cache remains the
+upstream protection. The local burst budget is 32 requests with a 60-per-minute refill,
+allowing the initial status plus 20 routes and a selected station board. It is not a
+subscription-wide or deployment-wide quota enforcement mechanism.

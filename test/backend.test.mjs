@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { BoundedCache } from '../server/cache.mjs';
-import { TflService, normalizeArrivals, normalizeRoute } from '../server/tfl.mjs';
+import { TflService, normalizeArrivals, normalizeRoute, normalizeLines } from '../server/tfl.mjs';
 import { createApp } from '../server/index.mjs';
 import { DemoService } from '../server/demo.mjs';
 
@@ -203,7 +203,7 @@ test('HTTP boundary serves explicit demo envelopes and rejects methods, unsuppor
   const base = `http://127.0.0.1:${app.address().port}`;
   const config = await fetch(`${base}/api/config`).then(response => response.json());
   assert.equal(config.demo, true);
-  assert.equal(config.modes.length, 4);
+  assert.equal(config.modes.length, 5);
   const lines = await fetch(`${base}/api/lines`).then(response => response.json());
   assert.equal(lines.source, 'demo');
   assert.ok(lines.data.length >= 4);
@@ -230,4 +230,52 @@ test('HTTP first-request live failure returns a sanitized error with no fixture 
   assert.equal(body.source, 'tfl');
   assert.equal(body.data, null);
   assert.doesNotMatch(JSON.stringify(body), /secret|demo/);
+});
+
+test('network registry includes Thameslink without claiming other National Rail coverage', () => {
+  const lines = normalizeLines([...tflLines,
+    { id: 'thameslink', name: 'Thameslink', modeName: 'national-rail' },
+    { id: 'southern', name: 'Southern', modeName: 'national-rail' },
+  ]);
+  assert.deepEqual(lines.map(line => line.id).sort(), ['central', 'elizabeth', 'thameslink']);
+  assert.equal(lines.find(line => line.id === 'thameslink').color, '#C91475');
+});
+
+test('Thameslink station boards use ArrivalDepartures and retain schedules and cancellations', async () => {
+  const calls = [];
+  const service = new TflService({ now: () => now, fetchImpl: async url => {
+    calls.push(url);
+    if (url.pathname.endsWith('/Status')) return response([{ id: 'thameslink', name: 'Thameslink', modeName: 'national-rail' }]);
+    if (url.pathname.endsWith('/Route/Sequence/all')) return response({ stations: [{ id: '910GBLFR', name: 'London Blackfriars', lat: 51.51181, lon: -0.103332 }] });
+    return response([
+      { estimatedTimeOfDeparture: at(90), destinationName: 'Brighton', platformName: '1' },
+      { scheduledTimeOfDeparture: at(150), destinationName: 'Bedford', departureStatus: 'Cancelled' },
+    ]);
+  } });
+  const board = await service.arrivals('910GBLFR', 'thameslink', 'national-rail');
+  assert.equal(board.data.length, 2);
+  assert.equal(board.data[0].lineId, 'thameslink');
+  assert.equal(board.data[0].scheduled, false);
+  assert.equal(board.data[0].eventType, 'departure');
+  assert.equal(board.data[1].scheduled, true);
+  assert.equal(board.data[1].cancelled, true);
+  const request = calls.find(url => url.pathname.endsWith('/ArrivalDepartures'));
+  assert.equal(request.pathname, '/StopPoint/910GBLFR/ArrivalDepartures');
+  assert.equal(request.searchParams.get('lineIds'), 'thameslink');
+});
+
+test('cold combined network load fits the upstream burst budget, with room for a station board', async () => {
+  const registry = Array.from({ length: 19 }, (_, i) => ({ id: `line-${i}`, name: `Line ${i}`, modeName: 'tube' }));
+  registry.push({ id: 'thameslink', name: 'Thameslink', modeName: 'national-rail' });
+  let calls = 0;
+  const service = new TflService({ now: () => now, fetchImpl: async url => {
+    calls++;
+    if (url.pathname.endsWith('/Status')) return response(registry);
+    if (url.pathname.endsWith('/Route/Sequence/all')) return response(routeRaw);
+    return response([]);
+  } });
+  const lines = await service.lines();
+  await Promise.all(lines.data.map(line => service.route(line.id)));
+  await service.arrivals('940GZZLUBNK', 'thameslink', 'national-rail');
+  assert.equal(calls, 22);
 });

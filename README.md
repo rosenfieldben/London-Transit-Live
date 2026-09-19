@@ -8,8 +8,10 @@ beyond the Greater London boundary. This is an independent project, not a TfL pr
 ## What the first version does
 
 - Lists TfL rail lines and their reported service conditions.
-- Filters Underground, DLR, London Overground and Elizabeth line services.
-- Loads a selected line's route geometry and station list.
+- Filters Underground, DLR, London Overground, Elizabeth line and Thameslink services.
+- Opens with all supported rail routes together on one geographic network map.
+- Lets you select a line for its stations and boards, or switch to a focused line view.
+- Loads routes with a shared browser cache and two concurrent requests; a missing route can be retried without losing the others.
 - Opens a station arrival board from either the map or a keyboard-accessible list.
 - Shows source, freshness, stale-data and unavailable states explicitly.
 - Offers a separate, clearly labelled demonstration mode for development.
@@ -18,7 +20,7 @@ Live mode fetches TfL data on demand through a shared server cache. It never sub
 sample data when a request fails. The demonstration dataset covers short sample sections;
 its geometry and predictions are illustrative and must not be used for travel.
 
-This starter does not yet include bus tracking, National Rail, trams, boats, journey
+This starter does not yet include bus tracking, other National Rail operators, trams, boats, journey
 planning, favourites or moving train markers. It is a first product slice, not feature
 parity with the mature NYC application.
 
@@ -79,8 +81,8 @@ Use HTTPS at the hosting layer. The health endpoint is `/api/health`.
 For the hosting build, install the pinned development tool with `npm ci`, then run
 `npm run build`. It produces `dist/server/index.js` and the hosting manifest.
 Only an explicit allowlist of public frontend assets is embedded. No secret is read
-at build time. On Sites, configure `TFL_APP_KEY` as a runtime secret if available;
-the initial low-traffic preview uses anonymous TfL access and stays in live mode.
+at build time. On Sites, `TFL_APP_KEY` is configured as a runtime secret.
+The private preview stays in live mode; development demo settings are separate.
 
 The initial cache and upstream request budget are process-local on Node and
 isolate-local on Workers. They do not enforce a deployment-wide TfL quota.
@@ -100,7 +102,10 @@ Powered by TfL Open Data. See [TfL's transport-data terms](https://tfl.gov.uk/co
 Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 Leaflet is included under its BSD-2-Clause licence in `frontend/vendor/leaflet/LICENSE`.
 
-Route lines describe the network; they do not locate a vehicle. Arrival boards contain
+The combined map covers the supported TfL lines plus Thameslink, including provider
+route variants extending beyond London. It does not cover every National Rail operator.
+Routes describe network coverage, not a guarantee of service on every branch at the
+current time; they do not locate a vehicle or reproduce precise track alignment. Arrival boards contain
 provider predictions or clearly labelled scheduled times. Empty predictions mean TfL
 returned none for that query, not proof that no services operate.
 

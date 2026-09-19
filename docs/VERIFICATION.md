@@ -2,7 +2,7 @@
 
 Date: 19 September 2026. Runtime: Node.js 24.19.0.
 
-Final result: all 27 Node tests, the workerd integration test and application syntax checks passed. The
+Final result: all 34 Node tests, the workerd integration test and application syntax checks passed. The
 demonstration HTTP server also served its HTML, JavaScript, CSS and map library
 with successful responses and the expected content types.
 
@@ -42,7 +42,7 @@ Separate endpoint investigation is recorded in [DATA-SOURCES.md](DATA-SOURCES.md
 
 ## Hosting and browser checks
 
-The Worker build completed successfully with seven explicitly bundled public assets.
+The Worker build completed successfully with eight explicitly bundled public assets.
 Four additional tests cover the Worker static-file boundary, demo API flow, runtime
 configuration changes, secret isolation, failure responses and request completion.
 The GitHub workflow runs the test suite, syntax checks and Worker build on pushes
@@ -92,9 +92,29 @@ Reference: [Cloudflare runtime invocation errors](https://developers.cloudflare.
 - Mobile layout, keyboard-only navigation and screen-reader behavior. The desktop
   browser checks do not establish visual or accessibility conformance.
 - Every station, branch, time of day, service disruption or cancellation in the live feed.
-- API-key authentication on the user's own TfL account, production quotas, deployed live-feed access,
-  long-running recovery, multiple processes, or load behavior.
+- Production-wide quotas, long-running recovery, multiple processes, or load behavior.
+- End-to-end Thameslink station boards on the private deployment after this update.
 - The exact current TfL licence notice text, because the terms page could not be read.
 
-The project is a tested first implementation, not a production certification. Account-key
-validation, hosted live-feed verification and mobile/accessibility checks remain.
+The project is a tested first implementation, not a production certification. Full station-board
+validation, long-running hosted recovery and mobile/accessibility checks remain.
+
+## Thameslink and combined-map update
+
+The keyed private deployment returned 200 for status and representative route requests
+before this update. Live provider research then verified Thameslink status, 145 stops,
+26 path variants and successful Blackfriars/Farringdon rail boards; see DATA-SOURCES.md.
+This is distinct from the controlled browser demonstration below.
+
+Added tests cover National Rail filtering, Thameslink's rail-board endpoint and line
+context, cancellations and schedules, the complete cold-network request budget,
+concurrent route loading, selected-line queue priority, cache sharing/expiry, partial
+failures, retry, mode filtering and partial progress reporting.
+
+The supervised browser at 1363 × 936 loaded all six explicitly labelled sample routes
+on the same map without horizontal overflow. Checks covered Thameslink selection,
+Blackfriars sample arrivals, switching network/selected-line views, filtering the map
+to Underground (2 of 2 routes), clearing an incompatible station selection, restoring
+all supported modes, and rapid Central-to-Thameslink selection. No application console
+errors were observed. The temporary local demo setting was removed before publishing.
+Mobile and screen-reader validation remain outstanding.
