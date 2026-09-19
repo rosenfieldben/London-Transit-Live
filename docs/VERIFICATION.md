@@ -2,7 +2,7 @@
 
 Date: 19 September 2026. Runtime: Node.js 24.19.0.
 
-Final result: all 26 automated tests and application syntax checks passed. The
+Final result: all 27 Node tests, the workerd integration test and application syntax checks passed. The
 demonstration HTTP server also served its HTML, JavaScript, CSS and map library
 with successful responses and the expected content types.
 
@@ -70,6 +70,18 @@ A separate Miniflare/workerd reproduction confirmed the original call fails;
 direct global calls and `fetch.bind(globalThis)` succeed with the same
 `AbortSignal.timeout(9000)` options. The provider now binds its default fetch to
 `globalThis`. A new regression test failed before the fix and passed after it.
+Testing the full built bundle also revealed that workerd rejects
+`redirect: 'error'` synchronously. The provider now uses `redirect: 'manual'` and
+rejects non-success statuses, so redirects cannot forward credentials. A regression
+test confirms a 302 response is rejected after one request without following it.
+The actual bundle in workerd returned 502 with no outbound requests before both
+fixes, then 200 with one outbound request and a normalized TfL fixture after them.
+
+The committed `npm run test:runtime` check executes the built bundle in Miniflare's
+workerd runtime with a controlled TfL response; CI runs it after building. It checks
+that the native fetch reaches the expected TfL endpoint and returns normalized live
+provider data. It requires neither a TfL key nor network access to TfL.
+
 Another test checks that diagnostic records include failure category and upstream
 status without URLs, raw exception messages, response bodies or API keys.
 

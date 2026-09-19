@@ -136,7 +136,9 @@ export class TflService {
     const startedAt = this.now();
     let upstreamStatus = null;
     try {
-      const response = await this.fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(9_000), redirect: 'error' });
+      // Workers accepts manual/follow, but rejects redirect:'error'. Manual
+      // keeps credentials on the original host; the status check rejects 3xx.
+      const response = await this.fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(9_000), redirect: 'manual' });
       upstreamStatus = response.status;
       if (!response.ok) {
         if (response.status === 429) {

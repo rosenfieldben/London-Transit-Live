@@ -11,6 +11,7 @@ npm ci
 npm test
 npm run check
 npm run build
+npm run test:runtime
 ```
 
 The pinned esbuild version bundles the Worker and a small explicit list of public

@@ -171,6 +171,21 @@ test('provider diagnostics retain failure categories without credentials or raw 
   assert.doesNotMatch(JSON.stringify(records), /private upstream detail/);
 });
 
+test('provider uses Worker-compatible redirect handling and rejects redirects without following them', async () => {
+  let calls = 0;
+  let requestedUrl, redirect;
+  const service = new TflService({ appKey: 'private-test-key', diagnostics: () => {}, fetchImpl: async (url, options) => {
+    calls++;
+    requestedUrl = url;
+    redirect = options.redirect;
+    return new Response(null, { status: 302, headers: { Location: 'https://other.example/collect' } });
+  } });
+  await assert.rejects(service.lines(), error => error.status === 502);
+  assert.equal(calls, 1);
+  assert.equal(redirect, 'manual');
+  assert.equal(requestedUrl.origin, 'https://api.tfl.gov.uk');
+});
+
 test('upstream 429 creates a shared backoff and failures never switch live mode to demo', async () => {
   let calls = 0;
   const service = new TflService({ now: () => now, fetchImpl: async () => { calls++; return new Response('', { status: 429, headers: { 'Retry-After': '60' } }); } });
