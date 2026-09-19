@@ -2,8 +2,8 @@ import { londonTime, isStale, isPredictionStale, currentPredictions, arrivalTimi
 import { RouteStore, visibleLines, networkSummary } from './network.mjs';
 
 const $ = id => document.getElementById(id);
-const state = { config: null, lines: [], linesEnvelope: null, mode: 'all', lineId: null, route: null, routeEnvelope: null, stationId: null, arrivals: null, lineSearch: '', stationSearch: '', routeLoading: false, arrivalLoading: false, routeError: '', arrivalError: '', lineError: '', routeSeq: 0, arrivalSeq: 0, lineSeq: 0, arrivalController: null, demo: false, mapView: 'network', networkRoutes: new Map(), networkErrors: new Map(), networkPending: new Set() };
-const modeNames = { tube: 'Underground', dlr: 'DLR', overground: 'Overground', 'elizabeth-line': 'Elizabeth line', 'national-rail': 'Thameslink', tram: 'Tram' };
+const state = { config: null, lines: [], linesEnvelope: null, mode: 'all', lineId: null, route: null, routeEnvelope: null, stationId: null, arrivals: null, lineSearch: '', stationSearch: '', routeLoading: false, arrivalLoading: false, routeError: '', arrivalError: '', lineError: '', routeSeq: 0, arrivalSeq: 0, lineSeq: 0, arrivalController: null, demo: false, mapView: 'network', mapArea: 'england', networkRoutes: new Map(), networkErrors: new Map(), networkPending: new Set() };
+const modeNames = { tube: 'Underground', dlr: 'DLR', overground: 'Overground', 'elizabeth-line': 'Elizabeth line', 'national-rail': 'National Rail', tram: 'Tram' };
 let map, routeLayers, networkLayers, tileFailures = 0;
 const markers = new Map();
 
@@ -135,7 +135,7 @@ function renderModes() {
 
 function renderLines() {
   const filtered = state.lines.filter(item => (state.mode === 'all' || item.mode === state.mode) && item.name.toLowerCase().includes(state.lineSearch.toLowerCase()));
-  $('line-count').textContent = `${filtered.length} ${filtered.length === 1 ? 'LINE' : 'LINES'}`;
+  $('line-count').textContent = `${filtered.length} ${filtered.length === 1 ? 'SERVICE' : 'SERVICES'}`;
   restoreFocus($('line-list'), 'line', () => {
     if (!filtered.length) { $('line-list').innerHTML = empty(state.lineError || 'No matching lines.', state.lineError ? 'The network could not be loaded.' : 'Try another name or transport mode.', state.lineError ? 'lines' : ''); return; }
     const groups = [...new Set(filtered.map(item => item.mode))];
@@ -154,8 +154,8 @@ function renderLines() {
 function renderRouteHeading() {
   const selected = line();
   if (state.mapView === 'network') {
-    $('route-title').textContent = 'London rail network';
-    $('route-subtitle').textContent = `${state.mode === 'all' ? 'All supported rail' : modeName(state.mode)} · Select a line to see its stations`;
+    $('route-title').textContent = state.mapArea === 'england' ? 'England rail network' : 'London rail network';
+    $('route-subtitle').textContent = `${state.mode === 'all' ? 'All supported rail' : modeName(state.mode)} · Select a line or operator for stations`;
     $('map-caption').textContent = `${state.demo ? 'SAMPLE NETWORK' : 'NETWORK VIEW'}${selected ? ` / ${selected.name.toUpperCase()}` : ''}`;
   }
   if (!selected) { $('route-status').hidden = true; if (state.mapView === 'line') { $('route-title').textContent = 'Choose a line'; $('route-subtitle').textContent = 'Select a line from the service overview.'; $('map-caption').textContent = 'LINE VIEW'; } return; }
@@ -169,7 +169,8 @@ function renderRouteHeading() {
   const reasons = [...new Set((selected.statuses || []).map(item => item.reason).filter(Boolean))];
   $('route-status').hidden = false;
   $('route-status').className = `route-status ${stale ? 'stale' : condition.type}`;
-  $('route-status').innerHTML = `<p><strong>${e(selected.name)} · ${stale ? 'Saved status · ' : ''}${e(condition.text)}</strong>${state.demo ? ' <span>— sample data</span>' : ''}</p>${reasons.map(reason => `<p>${e(reason)}</p>`).join('')}${stale ? '<p>Status updates are unavailable or out of date.</p>' : ''}`;
+  const nationalCoverage = selected.boardProvider === 'national-rail' ? '<p class="coverage-note">TfL route coverage may be incomplete. This is not a complete operator timetable.</p>' : '';
+  $('route-status').innerHTML = `<p><strong>${e(selected.name)} · ${stale ? 'Saved status · ' : ''}${e(condition.text)}</strong>${state.demo ? ' <span>— sample data</span>' : ''}</p>${reasons.map(reason => `<p>${/^https:\/\/(www\.)?(nationalrail\.co\.uk|tfl\.gov\.uk)\//.test(reason) ? `<a href="${e(reason)}" target="_blank" rel="noopener noreferrer">View disruption details ↗</a>` : e(reason)}</p>`).join('')}${stale ? '<p>Status updates are unavailable or out of date.</p>' : ''}${nationalCoverage}`;
   if (state.mapView === 'line') $('map-caption').textContent = `${selected.name.toUpperCase()} / ${state.demo ? 'SAMPLE ROUTE' : 'ROUTE VIEW'}`;
 }
 
@@ -203,7 +204,7 @@ async function loadLines(initial = false) {
 
 function initializeMap() {
   if (!window.L) { $('map').parentElement.classList.add('map-disabled'); $('map-loading').innerHTML = empty('Map unavailable.', 'You can still choose stations and view arrivals from the station list.'); return; }
-  map = L.map('map', { zoomControl: true, scrollWheelZoom: false }).setView([51.5074, -0.1278], 11);
+  map = L.map('map', { zoomControl: true, scrollWheelZoom: false, zoomSnap: .25, zoomDelta: .5 }).fitBounds([[49.85, -5.9], [55.82, 1.85]], { padding: [15, 15], animate: false });
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19 }).on('tileerror', () => { tileFailures++; if (tileFailures >= 2) $('tile-notice').hidden = false; }).addTo(map);
   networkLayers = L.featureGroup().addTo(map);
   routeLayers = L.featureGroup().addTo(map);
@@ -295,7 +296,7 @@ async function selectStation(id, fromMap = false) {
 }
 
 async function loadArrivals() {
-  if (!state.stationId || !line()) return;
+  if (!state.stationId || !line() || state.arrivals?.availability) return;
   state.arrivalController?.abort();
   const seq = ++state.arrivalSeq; const stationId = state.stationId; const lineId = state.lineId;
   const firstBoard = state.arrivalLoading && !state.arrivals;
@@ -307,7 +308,7 @@ async function loadArrivals() {
     if (!Array.isArray(result.data)) throw new Error('Arrival information is unavailable.');
     state.arrivals = result; state.arrivalLoading = false; state.arrivalError = result.error || '';
     noteSource(result); renderArrivals();
-    if (firstBoard) announce(`${currentPredictions(result.data).length} predictions loaded for ${station()?.name || 'this station'}.`);
+    if (firstBoard) announce(result.availability ? result.message : `${currentPredictions(result.data).length} predictions loaded for ${station()?.name || 'this station'}.`);
   } catch (error) {
     if (error.name === 'AbortError' || seq !== state.arrivalSeq) return;
     state.arrivalLoading = false; state.arrivalError = error.message || 'Unable to load arrivals.';
@@ -323,12 +324,20 @@ function renderArrivals() {
 
 function renderArrivalsContent() {
   const selected = station();
-  $('board-label').textContent = 'NEXT ARRIVALS';
+  $('board-label').textContent = line()?.boardProvider === 'national-rail' ? 'NATIONAL RAIL DEPARTURES' : 'NEXT ARRIVALS';
   $('arrivals-heading').textContent = selected?.name || 'Choose a station';
-  $('arrivals-subtitle').textContent = selected ? `${line()?.name || 'Selected line'} · All destinations` : 'Arrival predictions for your selected line.';
+  $('arrivals-subtitle').textContent = selected ? line()?.boardProvider === 'national-rail' ? 'National Rail · All operators at this station' : `${line()?.name || 'Selected line'} · All destinations` : 'Arrival predictions for your selected line.';
   $('arrival-notice').hidden = true; $('arrivals-updated').textContent = '';
   if (!selected) { $('arrival-source').textContent = '—'; $('arrival-source').className = 'source-chip'; $('arrivals-list').innerHTML = empty('Choose a station.', 'Select a station from the list or map.'); return; }
   if (state.arrivalLoading && !state.arrivals) { $('arrival-source').textContent = 'LOADING'; $('arrivals-list').innerHTML = '<div class="empty-state"><span class="spinner" aria-hidden="true"></span><p>Checking the next arrivals…</p></div>'; return; }
+  if (state.arrivals?.availability) {
+    $('arrival-source').textContent = state.arrivals.availability === 'not-configured' ? 'NOT CONNECTED' : 'UNAVAILABLE';
+    $('arrival-source').className = 'source-chip stale';
+    $('board-label').textContent = 'NATIONAL RAIL DEPARTURES';
+    $('arrivals-list').innerHTML = empty(state.arrivals.message, 'The route and station map remain available.') + '<p class="board-link"><a href="https://www.nationalrail.co.uk/live-trains/" target="_blank" rel="noopener noreferrer">Check National Rail live departures ↗</a></p>';
+    if (state.arrivals.crs) $('arrivals-updated').textContent = `Station code: ${state.arrivals.crs}`;
+    return;
+  }
   const remaining = state.arrivals ? currentPredictions(state.arrivals.data) : [];
   const stale = state.arrivals && (isStale(state.arrivals) || remaining.some(item => isPredictionStale(item, state.arrivals)));
   const demo = state.arrivals?.source === 'demo' || state.config?.demo;
@@ -339,11 +348,12 @@ function renderArrivalsContent() {
     $('arrival-notice').textContent = stale ? 'Saved predictions and schedules show their original expected times instead of a live countdown.' : 'Arrival predictions are temporarily unavailable.';
   }
   if (!state.arrivals) { $('arrivals-list').innerHTML = empty('Arrivals unavailable.', state.arrivalError, 'arrivals'); return; }
-  if (Number.isFinite(Date.parse(state.arrivals.fetchedAt))) $('arrivals-updated').textContent = `${stale ? 'Last received' : demo ? 'Sample generated' : 'Updated'} ${londonTime(state.arrivals.fetchedAt, { second: '2-digit' })} · London time${document.hidden ? ' · Updates paused' : ''}`;
+  const boardTime = state.arrivals.providerTimestamp || state.arrivals.fetchedAt;
+  if (Number.isFinite(Date.parse(boardTime))) $('arrivals-updated').textContent = `${stale ? 'Last update' : demo ? 'Sample generated' : 'Updated'} ${londonTime(boardTime, { second: '2-digit' })} · London time${document.hidden ? ' · Updates paused' : ''}`;
   const arrivals = remaining.sort((a, b) => Date.parse(a.expectedArrival) - Date.parse(b.expectedArrival)).slice(0, 12);
   if (!arrivals.length) { $('arrivals-list').innerHTML = empty(stale ? 'No current predictions remain in the saved data.' : 'No predictions currently reported.', 'This may be a terminus, outside service hours, or a gap in prediction coverage.'); return; }
   const hasDepartures = arrivals.some(item => item.eventType === 'departure');
-  $('board-label').textContent = hasDepartures ? 'ARRIVALS & DEPARTURES' : 'NEXT ARRIVALS';
+  $('board-label').textContent = state.arrivals.source === 'national-rail' ? 'NATIONAL RAIL DEPARTURES' : hasDepartures ? 'ARRIVALS & DEPARTURES' : 'NEXT ARRIVALS';
   $('arrivals-list').innerHTML = arrivals.map(arrival => {
     const timing = arrivalTiming(arrival, state.arrivals);
     return `<article class="arrival-row"><div><p class="arrival-destination">${e(arrival.destination || 'Destination not reported')}</p><p class="arrival-details"><span class="arrival-line">${e(arrival.lineName || line()?.name || '')}</span><br>${arrival.eventType === 'departure' ? 'Departs' : 'Arrives'}${arrival.platform ? ` · ${e(arrival.platform)}` : ''}</p></div><div class="arrival-timing"><p class="arrival-time${timing.small ? ' small' : ''}">${e(timing.value)}</p><p class="arrival-time-label">${e(timing.label)}</p></div></article>`;
@@ -366,6 +376,14 @@ $('station-search').addEventListener('input', event => { state.stationSearch = e
 $('line-list').addEventListener('click', event => { const button = event.target.closest('[data-line]'); if (button) selectLine(button.dataset.line); });
 $('station-list').addEventListener('click', event => { const button = event.target.closest('[data-station]'); if (button) selectStation(button.dataset.station); });
 $('fit-route').addEventListener('click', fitRoute);
+$('map-area-controls').addEventListener('click', event => {
+  const area = event.target.closest('[data-area]')?.dataset.area; if (!area) return;
+  state.mapArea = area;
+  [...$('map-area-controls').querySelectorAll('button')].forEach(button => button.setAttribute('aria-pressed', String(button.dataset.area === area)));
+  if (state.mapView !== 'network') setMapView('network');
+  if (map) { if (area === 'london') map.setView([51.5074, -0.1278], 11, { animate: false }); else map.fitBounds([[49.85, -5.9], [55.82, 1.85]], { padding: [15, 15], animate: false }); }
+  renderRouteHeading();
+});
 $('map-view-controls').addEventListener('click', event => { const view = event.target.closest('[data-view]')?.dataset.view; if (view) setMapView(view); });
 $('retry-network').addEventListener('click', () => ensureNetworkRoutes(true));
 document.addEventListener('click', event => {
@@ -383,6 +401,7 @@ async function start() {
   initializeMap(); updateClock();
   try { state.config = await request('/api/config'); noteSource(null); renderModes(); if (state.config.attribution) $('data-attribution').textContent = state.config.attribution; }
   catch { $('global-error').hidden = false; $('global-error').textContent = 'App settings could not be loaded. Available network data will still be shown.'; }
+  renderStations(); renderArrivals();
   await loadLines(true);
   setInterval(() => { if (!document.hidden) loadLines(); }, 60000);
   setInterval(() => { if (!document.hidden && state.stationId) loadArrivals(); }, 20000);

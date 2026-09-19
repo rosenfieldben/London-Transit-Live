@@ -49,11 +49,13 @@ or a station name. Maintain an equally capable keyboard path.
 Acceptance: one interchange can present the relevant modes without duplicate or
 misattributed arrivals, and map density remains usable on a phone.
 
-## Stage 3 — Buses and National Rail
+## Stage 3 — Buses and nationwide rail boards
 
 For buses, begin with stop boards and selected routes to control request volume. Audit
-the actual location fields before promising GPS vehicle tracking. Extend beyond the current Thameslink coverage to other National Rail operators
-through their official provider/credentials and attribution, with explicit coverage.
+the actual location fields before promising GPS vehicle tracking. The England map now includes the 25 National Rail operators in TfL’s registry.
+Next activate the prepared National Rail departure-board adapter through the owner’s
+Rail Data Marketplace subscription, validate real station boards, and replace incomplete
+operator geometry with a complete, licensed source where available.
 Darwin predictions are not a universal vehicle-location feed.
 
 Acceptance: each provider can fail independently; keys remain server-side; station and
@@ -80,3 +82,6 @@ position exposes whether it is reported or inferred.
 - One deployed process initially; a shared request budget and cache before horizontal scale.
 
 These are starting decisions, not constraints on where the project can grow.
+
+The map has London/England controls and retains cross-border route endpoints.
+Do not describe the current TfL map as every operator’s complete network.

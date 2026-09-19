@@ -5,7 +5,7 @@ export const MODES = [
   { id: 'dlr', name: 'DLR' },
   { id: 'overground', name: 'Overground' },
   { id: 'elizabeth-line', name: 'Elizabeth line' },
-  { id: 'national-rail', name: 'Thameslink' },
+  { id: 'national-rail', name: 'National Rail' },
 ];
 export const ATTRIBUTION = 'Powered by TfL Open Data. Independent project; not affiliated with Transport for London.';
 export const COLORS = {
@@ -15,7 +15,14 @@ export const COLORS = {
   dlr: '#00A4A7', 'elizabeth': '#6950A1', 'elizabeth-line': '#6950A1',
   lioness: '#FAA61A', mildmay: '#0077AD', windrush: '#E42313', weaver: '#9B0058',
   suffragette: '#5BBD72', liberty: '#61686B', 'london-overground': '#EE7C0E',
-  thameslink: '#C91475',
+  thameslink: '#C91475', 'avanti-west-coast': '#007B83', 'c2c': '#B11E8E',
+  'chiltern-railways': '#254A86', crosscountry: '#A9234A', 'east-midlands-railway': '#674070',
+  'gatwick-express': '#D32931', 'grand-central': '#E87812', 'greater-anglia': '#C72736',
+  'great-northern': '#52779C', 'great-western-railway': '#17624C', 'heathrow-express': '#705291',
+  'hull-trains': '#A02B7F', 'island-line': '#286CBA', 'london-north-eastern-railway': '#BC253A',
+  lumo: '#126BE5', merseyrail: '#B48100', 'northern-rail': '#34468E', scotrail: '#215C85',
+  southeastern: '#2874A6', southern: '#43844A', 'south-western-railway': '#087F95',
+  'transpennine-express': '#7F4F9D', 'transport-for-wales': '#B52330', 'west-midlands-trains': '#B56618',
 };
 const modeIds = new Set(MODES.map(mode => mode.id));
 export const safeId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9-]{0,79}$/.test(value);
@@ -25,10 +32,10 @@ const iso = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val
 
 export function normalizeLines(raw) {
   if (!Array.isArray(raw)) throw new HttpError(502, 'TfL returned an unexpected line response.');
-  const lines = raw.filter(line => safeId(line?.id) && modeIds.has(line.modeName)
-    && (line.modeName !== 'national-rail' || line.id === 'thameslink')).map(line => ({
+  const lines = raw.filter(line => safeId(line?.id) && modeIds.has(line.modeName)).map(line => ({
     id: line.id, name: clean(line.name, line.id), mode: line.modeName,
     color: COLORS[line.id] || '#687C92',
+    boardProvider: line.modeName === 'national-rail' && line.id !== 'thameslink' ? 'national-rail' : 'tfl',
     statuses: array(line.lineStatuses).map(status => ({
       description: clean(status.statusSeverityDescription, 'Status unavailable'),
       reason: clean(status.reason), severity: Number.isFinite(status.statusSeverity) ? status.statusSeverity : null,
@@ -38,14 +45,14 @@ export function normalizeLines(raw) {
 }
 
 // TfL lineStrings contain JSON-encoded coordinate arrays. We accept both
-// longitude/latitude and latitude/longitude, checking the London region before
+// longitude/latitude and latitude/longitude, checking Great Britain before
 // normalizing to the browser contract [latitude, longitude]. Unknown points are
 // rejected rather than drawing a route in the wrong part of the world.
-function londonPoint(point) {
+function britainPoint(point) {
   if (!Array.isArray(point) || point.length < 2 || !point.slice(0, 2).every(Number.isFinite)) return null;
   const [a, b] = point;
-  if (a >= -2 && a <= 2 && b >= 49 && b <= 54) return [b, a];
-  if (b >= -2 && b <= 2 && a >= 49 && a <= 54) return [a, b];
+  if (a >= -9 && a <= 3 && b >= 49 && b <= 61) return [b, a];
+  if (b >= -9 && b <= 3 && a >= 49 && a <= 61) return [a, b];
   return null;
 }
 
@@ -55,7 +62,7 @@ export function normalizeRoute(raw, line) {
   const visit = value => {
     if (!Array.isArray(value)) return;
     if (value.length && Array.isArray(value[0]) && typeof value[0][0] === 'number') {
-      const points = value.map(londonPoint).filter(Boolean);
+      const points = value.map(britainPoint).filter(Boolean);
       if (points.length >= 2) paths.push(points);
     } else value.forEach(visit);
   };
@@ -70,7 +77,7 @@ export function normalizeRoute(raw, line) {
   const candidates = sequenceStops.length ? sequenceStops : array(raw.stations).filter(stop => !stop?.id?.startsWith('HUB'));
   for (const stop of candidates) {
     if (!stop || !safeId(stop.id) || !Number.isFinite(stop.lat) || !Number.isFinite(stop.lon)) continue;
-    if (stop.lat < 49 || stop.lat > 54 || stop.lon < -2 || stop.lon > 2) continue;
+    if (stop.lat < 49 || stop.lat > 61 || stop.lon < -9 || stop.lon > 3) continue;
     if (stations.has(stop.id)) continue;
     stations.set(stop.id, {
       id: stop.id, name: clean(stop.name ?? stop.commonName, stop.id), lat: stop.lat, lon: stop.lon,
@@ -126,7 +133,7 @@ export class TflService {
     this.diagnostics = diagnostics;
     this.now = now;
     this.cache = cache;
-    this.upstream = new TokenBucket({ now, capacity: 32, perMinute: 60 });
+    this.upstream = new TokenBucket({ now, capacity: 64, perMinute: 60 });
     this.backoffUntil = 0;
   }
 

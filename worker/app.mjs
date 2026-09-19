@@ -1,18 +1,18 @@
 import { createApiHandler, SECURITY_HEADERS, errorResponse, jsonResponse } from '../server/api.mjs';
-import { TflService } from '../server/tfl.mjs';
+import { TransitService } from '../server/transit.mjs';
 import { DemoService } from '../server/demo.mjs';
 import { HttpError } from '../server/cache.mjs';
 
-export function createWorker({ assets, serviceFactory = ({ demo, appKey }) => demo
-  ? new DemoService() : new TflService({ appKey }) }) {
+export function createWorker({ assets, serviceFactory = ({ demo, ...config }) => demo
+  ? new DemoService() : new TransitService(config) }) {
   let activeConfig, api;
   return {
     async fetch(request, env = {}, ctx = {}) {
-      const config = { demo: env.DEMO_MODE === 'true', appKey: env.TFL_APP_KEY || '' };
+      const config = { demo: env.DEMO_MODE === 'true', appKey: env.TFL_APP_KEY || '', nationalRailKey: env.NATIONAL_RAIL_API_KEY || '', nationalRailBase: env.NATIONAL_RAIL_API_BASE || '' };
       try {
         const url = new URL(request.url);
         if (url.pathname.startsWith('/api/')) {
-          if (!api || activeConfig.demo !== config.demo || activeConfig.appKey !== config.appKey) {
+          if (!api || activeConfig.demo !== config.demo || activeConfig.appKey !== config.appKey || activeConfig.nationalRailKey !== config.nationalRailKey || activeConfig.nationalRailBase !== config.nationalRailBase) {
             activeConfig = config;
             api = createApiHandler({ service: serviceFactory(config), demo: config.demo });
           }

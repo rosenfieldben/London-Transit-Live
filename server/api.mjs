@@ -19,7 +19,7 @@ export function errorResponse(cause, demo = false) {
     cause instanceof URIError ? 400 : 500,
     cause instanceof URIError ? 'Invalid path.' : 'The request could not be completed.',
   );
-  return jsonResponse(error.status, { source: demo ? 'demo' : 'tfl', fetchedAt: null,
+  return jsonResponse(error.status, { source: demo ? 'demo' : cause?.source === 'national-rail' ? 'national-rail' : 'tfl', fetchedAt: null,
     stale: false, error: error.message, data: null }, error.status === 429 ? { 'Retry-After': '10' } : {});
 }
 
@@ -39,7 +39,7 @@ export function createApiHandler({ service, demo = false }) {
         ? new Response(null, { headers: SECURITY_HEADERS }) : jsonResponse(200, { ok: true });
       if (request.method !== 'GET') throw new HttpError(405, 'API endpoints require GET.');
       if (!requests.take()) throw new HttpError(429, 'Too many requests. Please try again shortly.');
-      if (url.pathname === '/api/config') return jsonResponse(200, { demo, modes: MODES, attribution: ATTRIBUTION });
+      if (url.pathname === '/api/config') return jsonResponse(200, { demo, modes: MODES, attribution: ATTRIBUTION, nationalRailConfigured: Boolean(service.nationalRailConfigured) });
       if (url.pathname === '/api/lines') return jsonResponse(200, await service.lines());
       const route = url.pathname.match(/^\/api\/lines\/([^/]+)\/route$/);
       if (route) return jsonResponse(200, await service.route(decodeURIComponent(route[1])));

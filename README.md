@@ -2,13 +2,14 @@
 
 A first, runnable foundation for a London counterpart to
 [NYC Transit Live](https://github.com/rosenfieldben/nyc-transit-live).
-Scope is Greater London and the TfL rail network, including services extending
-beyond the Greater London boundary. This is an independent project, not a TfL product.
+Scope includes London transit and TfL-supplied National Rail routes across England,
+with cross-border connections retained. This is an independent project, not a TfL product.
 
 ## What the first version does
 
 - Lists TfL rail lines and their reported service conditions.
-- Filters Underground, DLR, London Overground, Elizabeth line and Thameslink services.
+- Filters Underground, DLR, London Overground, Elizabeth line and National Rail operators.
+- Switches between London and England map areas, with 44 lines/operators observed in the provider registry.
 - Opens with all supported rail routes together on one geographic network map.
 - Lets you select a line for its stations and boards, or switch to a focused line view.
 - Loads routes with a shared browser cache and two concurrent requests; a missing route can be retried without losing the others.
@@ -20,7 +21,7 @@ Live mode fetches TfL data on demand through a shared server cache. It never sub
 sample data when a request fails. The demonstration dataset covers short sample sections;
 its geometry and predictions are illustrative and must not be used for travel.
 
-This starter does not yet include bus tracking, other National Rail operators, trams, boats, journey
+This starter does not yet include bus tracking, complete coverage of every rail operator/branch, trams, boats, journey
 planning, favourites or moving train markers. It is a first product slice, not feature
 parity with the mature NYC application.
 
@@ -45,6 +46,12 @@ npm start
 an API key. The key stays on the server. Keyless requests can work, but should not be relied
 on for an ongoing deployment. Use only `app_key`; TfL says `app_id` is no longer required.
 Never put the key in frontend JavaScript, a repository, or a public URL.
+
+For **nationwide live departure boards**, a separate National Rail public Live Departure
+Board subscription through Rail Data Marketplace is required. Routes and TfL status
+work with the existing TfL connection. New National Rail boards explicitly show
+“not connected” until the National Rail key and product URL are configured; Thameslink
+continues to use its working TfL board. See [National Rail setup](docs/NATIONAL-RAIL-SETUP.md).
 
 Run the automated checks with:
 
@@ -102,8 +109,9 @@ Powered by TfL Open Data. See [TfL's transport-data terms](https://tfl.gov.uk/co
 Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 Leaflet is included under its BSD-2-Clause licence in `frontend/vendor/leaflet/LICENSE`.
 
-The combined map covers the supported TfL lines plus Thameslink, including provider
-route variants extending beyond London. It does not cover every National Rail operator.
+The combined map includes 25 TfL-listed National Rail operators alongside London transit.
+It is an England-wide geographic view, not a claim of complete operator coverage.
+For example, the observed CrossCountry route feed omits several major corridors.
 Routes describe network coverage, not a guarantee of service on every branch at the
 current time; they do not locate a vehicle or reproduce precise track alignment. Arrival boards contain
 provider predictions or clearly labelled scheduled times. Empty predictions mean TfL

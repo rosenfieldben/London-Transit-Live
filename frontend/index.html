@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#122745" />
-    <meta name="description" content="Explore London's rail network, service updates and station arrival predictions." />
+    <meta name="description" content="Explore London and England’s rail networks, operators, stations and departure boards." />
     <title>London Transit Live</title>
     <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
     <link rel="stylesheet" href="/style.css" />
@@ -16,8 +16,8 @@
         <span class="brand-symbol" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M9 4h14a3 3 0 0 1 3 3v15a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z"/><path d="M6 15h20M11 25l-4 5m14-5 4 5M12 8h8"/><circle cx="11" cy="20" r="1"/><circle cx="21" cy="20" r="1"/></svg></span>
         <span class="brand-copy">LONDON<span>TRANSIT LIVE</span></span>
       </a>
-      <div class="header-description">Your view of the capital’s rail network</div>
-      <div class="header-meta"><span class="edition">RAIL / FIRST RELEASE</span><span class="clock-block"><span id="london-clock">—</span><span>LONDON TIME</span></span></div>
+      <div class="header-description">London and England’s rail network</div>
+      <div class="header-meta"><span class="edition">LONDON + ENGLAND</span><span class="clock-block"><span id="london-clock">—</span><span>LONDON TIME</span></span></div>
     </header>
 
     <div id="demo-banner" class="demo-banner" hidden><span class="demo-tag">DEMO</span><span>Sample network data. Arrival times and service conditions are illustrative.</span></div>
@@ -25,30 +25,30 @@
     <main class="workspace">
       <aside class="network-panel panel" aria-labelledby="network-heading">
         <div class="panel-heading"><div><p class="eyebrow">01 / THE NETWORK</p><h1 id="network-heading">Service overview</h1></div><span class="small-icon" aria-hidden="true">↗</span></div>
-        <p class="panel-intro">See the network together. Choose a line for stations and arrivals.</p>
+        <p class="panel-intro">See the network together. Choose a line or operator for stations and boards.</p>
         <div id="mode-filters" class="mode-filters" aria-label="Filter lines by transport mode"></div>
-        <label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="line-search" type="search" placeholder="Search the line list" aria-label="Search the line list" autocomplete="off" /></label>
-        <div class="list-heading"><span>LINES</span><span id="line-count">—</span></div>
+        <label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="line-search" type="search" placeholder="Search lines and operators" aria-label="Search lines and operators" autocomplete="off" /></label>
+        <div class="list-heading"><span>LINES & OPERATORS</span><span id="line-count">—</span></div>
         <div id="line-list" class="line-list"><div class="empty-state"><span class="spinner" aria-hidden="true"></span><p>Loading the network…</p></div></div>
         <div class="panel-footnote"><span id="network-health" class="health-dot"></span><span id="network-updated">Connecting to data service</span></div>
       </aside>
 
       <section class="map-panel" aria-labelledby="route-title">
-        <div class="route-heading"><div><p class="eyebrow">02 / EXPLORE THE NETWORK</p><h2 id="route-title">London’s rail network</h2><p id="route-subtitle">Select a line to see stations and connections.</p></div><span id="route-color" class="route-color" aria-hidden="true"></span></div>
-        <div class="map-toolbar"><div id="map-view-controls" class="map-view-controls" role="group" aria-label="Map view"><button type="button" data-view="network" aria-pressed="true">Network map</button><button type="button" data-view="line" aria-pressed="false">Selected line</button></div></div>
+        <div class="route-heading"><div><p class="eyebrow">02 / EXPLORE THE NETWORK</p><h2 id="route-title">England rail network</h2><p id="route-subtitle">Select a line or operator to see stations.</p></div><span id="route-color" class="route-color" aria-hidden="true"></span></div>
+        <div class="map-toolbar"><div id="map-area-controls" class="map-view-controls" role="group" aria-label="Map area"><button type="button" data-area="london" aria-pressed="false">London</button><button type="button" data-area="england" aria-pressed="true">England</button></div><div id="map-view-controls" class="map-view-controls" role="group" aria-label="Map view"><button type="button" data-view="network" aria-pressed="true">Network map</button><button type="button" data-view="line" aria-pressed="false">Selected line</button></div></div>
         <div id="network-progress" class="network-progress"><span id="network-progress-text">Loading network routes…</span><button id="retry-network" type="button" class="text-button" hidden>Retry missing routes</button></div>
         <div id="route-status" class="route-status" hidden></div>
         <div class="map-wrap"><div id="map" aria-label="Rail network map. Select a line to reveal stations. The line and station lists provide keyboard access."></div><div id="map-loading" class="map-message"><span class="spinner" aria-hidden="true"></span><span>Preparing your map…</span></div><div id="tile-notice" class="tile-notice" hidden>Street map unavailable. Route and station markers remain usable.</div><div class="map-label"><span class="map-label-dot"></span><span id="map-caption">NETWORK VIEW</span></div></div>
         <div class="map-footer"><span><span class="legend-station"></span>Line stations</span><span><span class="legend-selected"></span>Selected station</span><button id="fit-route" class="text-button" type="button" disabled>Fit network <span aria-hidden="true">↗</span></button></div>
-        <p class="map-coverage">Tube, DLR, Overground, Elizabeth line and Thameslink. Other National Rail operators are not yet included. Routes show network coverage; services vary by time and day.</p>
+        <p class="map-coverage">TfL-supplied routes across England, with cross-border connections. Operator coverage can be incomplete; routes are not exact tracks or a current timetable. National Rail boards need a separate live connection.</p>
       </section>
 
       <aside class="station-panel panel" aria-label="Stations and arrivals">
-        <section class="station-explorer" aria-labelledby="stations-heading"><div class="panel-heading"><div><p class="eyebrow">03 / YOUR STATION</p><h2 id="stations-heading">Stations</h2></div><span id="station-count" class="count-chip">0</span></div><label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="station-search" type="search" placeholder="Find a station on this line" aria-label="Find a station on the selected line" autocomplete="off" /></label><div id="station-list" class="station-list"><p class="empty-copy">Stations will appear when you select a line.</p></div></section>
+        <section class="station-explorer" aria-labelledby="stations-heading"><div class="panel-heading"><div><p class="eyebrow">03 / YOUR STATION</p><h2 id="stations-heading">Stations</h2></div><span id="station-count" class="count-chip">0</span></div><label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="station-search" type="search" placeholder="Find a station" aria-label="Find a station on the selected line" autocomplete="off" /></label><div id="station-list" class="station-list"><p class="empty-copy">Stations will appear when you select a line.</p></div></section>
         <section class="arrivals-section" aria-labelledby="arrivals-heading"><div class="arrivals-top"><p id="board-label" class="eyebrow">NEXT ARRIVALS</p><span id="arrival-source" class="source-chip">—</span></div><h2 id="arrivals-heading">Choose a station</h2><p id="arrivals-subtitle" class="arrivals-subtitle">Arrival predictions for your selected line.</p><div id="arrival-notice" class="arrival-notice" hidden></div><div id="arrivals-list" class="arrivals-list"><div class="empty-state"><svg class="empty-train" viewBox="0 0 40 40" aria-hidden="true"><rect x="11" y="5" width="18" height="26" rx="4"/><path d="M11 20h18m-13 11-4 5m12-5 4 5M16 10h8"/><circle cx="16" cy="25" r="1"/><circle cx="24" cy="25" r="1"/></svg><p>Choose a station.</p><span>Choose a station from the list or map.</span></div></div><p id="arrivals-updated" class="arrivals-updated"></p></section>
       </aside>
     </main>
-    <footer class="app-footer"><span>An independent London rail project.</span><span><a href="https://tfl.gov.uk/corporate/terms-and-conditions/transport-data-service" target="_blank" rel="noopener noreferrer">Powered by TfL Open Data</a><span class="footer-separator">/</span>Predictions may change.<span id="data-attribution" class="attribution-copy"></span></span></footer>
+    <footer class="app-footer"><span>An independent London and national rail project.</span><span><a href="https://tfl.gov.uk/corporate/terms-and-conditions/transport-data-service" target="_blank" rel="noopener noreferrer">Powered by TfL Open Data</a><span class="footer-separator">/</span>Predictions may change.<span id="data-attribution" class="attribution-copy"></span><span class="attribution-copy">Station codes: Department for Transport NaPTAN, © Crown copyright, <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener noreferrer">Open Government Licence v3.0</a>. National departure data, when connected: National Rail.</span></span></footer>
     <div id="announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
     <script src="/vendor/leaflet/leaflet.js"></script>
     <script type="module" src="/app.js"></script>

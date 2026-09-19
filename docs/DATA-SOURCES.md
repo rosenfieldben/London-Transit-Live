@@ -2,7 +2,7 @@
 
 ## First provider: Transport for London
 
-The first release covers Greater London rail. TfL's Unified API supplies line status, stations, route geometry and station predictions. Thameslink is included through TfL; other National Rail operators, buses, river services and cycle hire can be added independently later.
+The current release combines London transit with England-wide National Rail route coverage from TfL's Unified API. TfL supplies line/operator status, stations and route geometry; its station boards support London transit and Thameslink. Other National Rail station boards use the separate RDM adapter described below.
 
 Official references:
 
@@ -19,7 +19,7 @@ All paths below are relative to `https://api.tfl.gov.uk`.
 
 | Feature | Endpoint | Handling |
 | --- | --- | --- |
-| Mode discovery | `/Line/Meta/Modes` | Rail mode IDs include `tube`, `dlr`, `overground`, `elizabeth-line`, `national-rail`, `tram`. The app accepts only Thameslink from `national-rail`. |
+| Mode discovery | `/Line/Meta/Modes` | Rail mode IDs include `tube`, `dlr`, `overground`, `elizabeth-line`, `national-rail`, `tram`. The app includes the provider’s National Rail operator registry. |
 | Line discovery | `/Line/Mode/{modes}` | Discover provider IDs; mode and line IDs differ. Elizabeth line's mode is `elizabeth-line`, its line ID is `elizabeth`. |
 | Network status | `/Line/Mode/{modes}/Status` | Keep every status and disruption description; an unavailable response is not good service. |
 | Station search | `/StopPoint/Search?query={query}&modes={modes}` | Results can be interchange hubs requiring resolution to mode-specific stop IDs. |
@@ -108,3 +108,43 @@ in flight and selected lines given priority. The shared provider cache remains t
 upstream protection. The local burst budget is 32 requests with a 60-per-minute refill,
 allowing the initial status plus 20 routes and a selected station board. It is not a
 subscription-wide or deployment-wide quota enforcement mechanism.
+
+## England-wide National Rail expansion
+
+On 19 September 2026, 13:15–13:16 UTC, the combined TfL status endpoint returned
+44 entries: 19 London transit lines and 25 National Rail operators. All 25 National
+Rail Route/Sequence requests succeeded. Observed full-coordinate counts included
+Avanti 49 stations, LNER 59, GWR 255, Northern 518 and TransPennine Express 105.
+The normalizer now accepts Great Britain coordinates rather than cutting off stations
+north of 54° or west of 2°W. Cross-border endpoints remain visible.
+
+**Coverage is incomplete.** CrossCountry's observed feed included only 45 stops and
+omitted major northern and south-western corridors. TfL variants may include diversions
+or pass-through locations. Neither a successful route fetch nor a station in the
+route response proves that a particular train calls there today. The UI states these
+limits and does not manufacture missing connections.
+
+TfL ArrivalDepartures rejected Avanti, LNER, CrossCountry, GWR and TransPennine queries
+with HTTP 400 invalid-line errors. National Rail boards therefore use a separate,
+currently unconfigured RDM adapter; see NATIONAL-RAIL-SETUP.md. Existing Thameslink
+boards retain the verified TfL endpoint. National Rail operator status still comes
+from TfL and is displayed as reported, with safe links to supplied disruption pages.
+
+### NaPTAN station-code reference
+
+`data/naptan-rail-codes.json` derives from the Department for Transport's official
+[NaPTAN rail access nodes XML](https://naptan.api.dft.gov.uk/v1/access-nodes?dataFormat=xml&atcoAreaCodes=910),
+retrieved 19 September 2026. Provider revision: 25 May 2025. Source contains 2,661
+active RLY station records, 2,660 with CRS. The compact index retains 2,651 stop-area
+IDs; three conflicting mappings are excluded. Only active railway records with CRS
+are used, joining each explicit stopAreas member to its CRS and source coordinate.
+Duplicate CRS records are not collapsed to a guessed canonical station. Runtime
+matching additionally requires nearby coordinates.
+
+Contains public sector information licensed under the
+[Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
+© Crown copyright. The UI credits Department for Transport NaPTAN.
+
+The local upstream burst budget is now 64 requests, retaining a 60-per-minute refill,
+so the shared two-request browser queue can load 44 routes without exhausting a cold
+process's burst allowance. This still does not coordinate a deployment-wide quota.

@@ -2,7 +2,7 @@
 
 Date: 19 September 2026. Runtime: Node.js 24.19.0.
 
-Final result: all 34 Node tests, the workerd integration test and application syntax checks passed. The
+Final result: all 45 Node tests, two workerd integration tests and application syntax checks passed. The
 demonstration HTTP server also served its HTML, JavaScript, CSS and map library
 with successful responses and the expected content types.
 
@@ -118,3 +118,34 @@ to Underground (2 of 2 routes), clearing an incompatible station selection, rest
 all supported modes, and rapid Central-to-Thameslink selection. No application console
 errors were observed. The temporary local demo setting was removed before publishing.
 Mobile and screen-reader validation remain outstanding.
+
+## England and National Rail expansion
+
+The live public TfL snapshot captured 19 September 2026 at 13:15–13:16 UTC contained
+44 status records and successful Route/Sequence responses for all 25 National Rail
+operators. The expanded coordinate normalizer preserved all of their route extents,
+including Cornwall, northern England and cross-border endpoints. A separate direct
+keyless application request timed out; the successful research capture does not prove
+availability from every execution environment or a deployed end-to-end board.
+
+Controlled tests cover the 44-route cold-load budget, exact CRS mapping and coordinate
+checks, ambiguous CRS exclusions, RDM endpoint restriction, secret isolation, redirects,
+shared station caching, stale provider timestamps, cancellation/delay semantics, withheld
+platforms, midnight and repeated autumn clock hours. The actual deployment bundle was
+also exercised in workerd with mocked outbound TfL and authenticated National Rail
+responses, checking its combined provider path and credential separation.
+
+Desktop browser QA replayed the observed 25-operator route snapshot alongside five
+explicit London sample lines in visibly labelled demo mode. All 25 National Rail maps
+loaded; checks covered the National Rail filter, England/London framing, LNER's 59 stops,
+York station search/selection, the NOT CONNECTED message and verified YRK code, the
+National Rail external board link, and network/selected-line switching. No application
+console errors or horizontal overflow were observed at 1363 × 936. A fractional map
+zoom makes the England extent fill the available map height. Mobile layout uses an
+unclipped auto-height panel, but no mobile browser or screen-reader conformance test
+has been performed. Snapshot replay code/data were removed before committing.
+
+**Still pending:** the user's National Rail subscription and authenticated live checks.
+The RDM adapter has only controlled-response verification, not production authentication.
+TfL operator geometry is incomplete for some operators (notably CrossCountry); do not
+claim complete nationwide track/service coverage from this dataset.

@@ -32,3 +32,33 @@ test('built Worker requests and normalizes TfL data in the hosting runtime', asy
     accept: 'application/json',
   }]);
 });
+
+test('built Worker composes TfL routes with an authenticated National Rail station board', async t => {
+  const calls = [];
+  const runtime = new Miniflare({
+    modules: true, compatibilityDate: '2025-09-01', cf: false,
+    scriptPath: new URL('../../dist/server/index.js', import.meta.url).pathname,
+    bindings: { NATIONAL_RAIL_API_KEY: 'synthetic-national-test-key', NATIONAL_RAIL_API_BASE: 'https://api1.raildata.org.uk/test-product/LDBWS/api/20220120' },
+    outboundService: async request => {
+      const url = new URL(request.url);
+      calls.push({ host: url.hostname, path: url.pathname, key: request.headers.get('x-apikey') });
+      if (url.pathname.endsWith('/Status')) return Response.json([{ id: 'london-north-eastern-railway', name: 'LNER', modeName: 'national-rail' }]);
+      if (url.pathname.endsWith('/Route/Sequence/all')) return Response.json({ stations: [{ id: '910GYORK', name: 'York', lat: 53.95797, lon: -1.09318 }] });
+      const clock = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(Date.now() + 300000));
+      return Response.json({ crs: 'YRK', generatedAt: new Date().toISOString(), trainServices: [{ std: clock, etd: 'On time', operator: 'LNER', destination: [{ locationName: 'Newcastle' }] }] });
+    },
+  });
+  t.after(() => runtime.dispose());
+  const response = await runtime.dispatchFetch('http://localhost/api/stations/910GYORK/arrivals?lineId=london-north-eastern-railway&mode=national-rail');
+  assert.equal(response.status, 200);
+  const board = await response.json();
+  assert.equal(board.source, 'national-rail');
+  assert.equal(board.boardScope, 'all-operators');
+  assert.equal(board.data[0].lineName, 'LNER');
+  assert.equal(board.data[0].destination, 'Newcastle');
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2].host, 'api1.raildata.org.uk');
+  assert.equal(calls[2].key, 'synthetic-national-test-key');
+  assert.ok(calls.slice(0, 2).every(call => call.key === null));
+  assert.doesNotMatch(JSON.stringify(board), /synthetic-national-test-key/);
+});

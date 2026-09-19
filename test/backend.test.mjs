@@ -5,6 +5,7 @@ import { BoundedCache } from '../server/cache.mjs';
 import { TflService, normalizeArrivals, normalizeRoute, normalizeLines } from '../server/tfl.mjs';
 import { createApp } from '../server/index.mjs';
 import { DemoService } from '../server/demo.mjs';
+import { RouteStore } from '../frontend/network.mjs';
 
 const now = Date.parse('2026-09-19T12:00:00Z');
 const at = offset => new Date(now + offset * 1000).toISOString();
@@ -232,12 +233,14 @@ test('HTTP first-request live failure returns a sanitized error with no fixture 
   assert.doesNotMatch(JSON.stringify(body), /secret|demo/);
 });
 
-test('network registry includes Thameslink without claiming other National Rail coverage', () => {
+test('network registry includes National Rail operators with distinct board providers', () => {
   const lines = normalizeLines([...tflLines,
     { id: 'thameslink', name: 'Thameslink', modeName: 'national-rail' },
     { id: 'southern', name: 'Southern', modeName: 'national-rail' },
   ]);
-  assert.deepEqual(lines.map(line => line.id).sort(), ['central', 'elizabeth', 'thameslink']);
+  assert.deepEqual(lines.map(line => line.id).sort(), ['central', 'elizabeth', 'southern', 'thameslink']);
+  assert.equal(lines.find(line => line.id === 'southern').boardProvider, 'national-rail');
+  assert.equal(lines.find(line => line.id === 'thameslink').boardProvider, 'tfl');
   assert.equal(lines.find(line => line.id === 'thameslink').color, '#C91475');
 });
 
@@ -265,7 +268,7 @@ test('Thameslink station boards use ArrivalDepartures and retain schedules and c
 });
 
 test('cold combined network load fits the upstream burst budget, with room for a station board', async () => {
-  const registry = Array.from({ length: 19 }, (_, i) => ({ id: `line-${i}`, name: `Line ${i}`, modeName: 'tube' }));
+  const registry = Array.from({ length: 43 }, (_, i) => ({ id: `line-${i}`, name: `Line ${i}`, modeName: 'tube' }));
   registry.push({ id: 'thameslink', name: 'Thameslink', modeName: 'national-rail' });
   let calls = 0;
   const service = new TflService({ now: () => now, fetchImpl: async url => {
@@ -275,7 +278,8 @@ test('cold combined network load fits the upstream burst budget, with room for a
     return response([]);
   } });
   const lines = await service.lines();
-  await Promise.all(lines.data.map(line => service.route(line.id)));
+  const routes = new RouteStore(id => service.route(id));
+  await Promise.all(lines.data.map(line => routes.get(line.id)));
   await service.arrivals('940GZZLUBNK', 'thameslink', 'national-rail');
-  assert.equal(calls, 22);
+  assert.equal(calls, 46);
 });

@@ -2,11 +2,13 @@ export const londonTime = (date = new Date(), options = {}) => new Intl.DateTime
 
 export function isStale(envelope, now = Date.now(), maxAge = 90000) {
   const fetched = Date.parse(envelope?.fetchedAt);
-  return Boolean(envelope?.stale) || !Number.isFinite(fetched) || now - fetched > maxAge;
+  const provider = Date.parse(envelope?.providerTimestamp);
+  return Boolean(envelope?.stale) || !Number.isFinite(fetched) || now - fetched > maxAge || (Number.isFinite(provider) && now - provider > maxAge);
 }
 
 export function arrivalTiming(arrival, envelope, now = Date.now()) {
   if (arrival.cancelled) return { value: 'Cancelled', label: 'Service update', small: true };
+  if (arrival.delayed) return { value: 'Delayed', label: isPredictionStale(arrival, envelope, now) ? 'Saved update' : 'Time unconfirmed', small: true };
   const expected = Date.parse(arrival.expectedArrival);
   if (!Number.isFinite(expected)) return { value: '—', label: 'Time unavailable', small: false };
   if (isPredictionStale(arrival, envelope, now)) return { value: londonTime(expected), label: arrival.scheduled ? 'Saved schedule' : 'Saved prediction', small: true };
@@ -26,7 +28,7 @@ export function currentPredictions(arrivals, now = Date.now()) {
   return arrivals.filter(arrival => {
     const expected = Date.parse(arrival.expectedArrival);
     const validUntil = Date.parse(arrival.validUntil);
-    return Number.isFinite(expected) && expected >= now - 60000 && (!Number.isFinite(validUntil) || validUntil > now);
+    return Number.isFinite(expected) && (expected >= now - 60000 || Date.parse(arrival.retainUntil) > now) && (!Number.isFinite(validUntil) || validUntil > now);
   });
 }
 

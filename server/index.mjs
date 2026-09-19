@@ -4,14 +4,14 @@ import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { HttpError } from './cache.mjs';
 import { createApiHandler, SECURITY_HEADERS } from './api.mjs';
-import { TflService } from './tfl.mjs';
+import { TransitService } from './transit.mjs';
 import { DemoService } from './demo.mjs';
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../frontend');
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 const headers = SECURITY_HEADERS;
 
-export function createApp({ demo = false, service = demo ? new DemoService() : new TflService({ appKey: process.env.TFL_APP_KEY || '' }), staticRoot = defaultRoot } = {}) {
+export function createApp({ demo = false, service = demo ? new DemoService() : new TransitService({ appKey: process.env.TFL_APP_KEY || '', nationalRailKey: process.env.NATIONAL_RAIL_API_KEY || '', nationalRailBase: process.env.NATIONAL_RAIL_API_BASE || '' }), staticRoot = defaultRoot } = {}) {
   const root = resolve(staticRoot);
   const handleApi = createApiHandler({ service, demo });
   const json = (res, status, value) => {

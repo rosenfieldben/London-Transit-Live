@@ -15,3 +15,13 @@ test('scheduled times are not presented as live predictions', () => assert.equal
 test('stale schedules remain labelled as schedules', () => assert.equal(arrivalTiming({ ...prediction, scheduled: true }, { ...fresh, stale: true }, now).label, 'Saved schedule'));
 test('London formatting respects British summer and winter time', () => { assert.equal(londonTime('2026-09-19T11:00:00Z'), '12:00'); assert.equal(londonTime('2026-12-19T11:00:00Z'), '11:00'); });
 test('remote colors and text cannot inject markup', () => { assert.equal(safeColor('#6950a1'), '#6950a1'); assert.equal(safeColor('red;position:fixed'), '#566b84'); assert.equal(escapeHTML('<img src=x onerror="alert(1)">'), '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;'); });
+
+test('unconfirmed national delays are retained briefly without a countdown and old provider boards are stale', () => {
+  const now = Date.parse('2026-09-19T12:00:00Z');
+  const envelope = { fetchedAt: new Date(now).toISOString(), data: [] };
+  const arrival = { delayed: true, expectedArrival: new Date(now - 300000).toISOString(), retainUntil: new Date(now + 60000).toISOString() };
+  assert.equal(currentPredictions([arrival], now).length, 1);
+  assert.equal(arrivalTiming(arrival, envelope, now).value, 'Delayed');
+  assert.equal(currentPredictions([arrival], now + 60000).length, 0);
+  assert.equal(isStale({ ...envelope, providerTimestamp: new Date(now - 120000).toISOString() }, now), true);
+});
