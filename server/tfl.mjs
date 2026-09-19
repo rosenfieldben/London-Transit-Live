@@ -114,9 +114,13 @@ export function normalizeArrivals(raw, line, now = Date.now()) {
 }
 
 export class TflService {
-  constructor({ appKey = '', fetchImpl = fetch, now = Date.now, cache = new BoundedCache({ now }) } = {}) {
+  constructor({ appKey = '', fetchImpl = globalThis.fetch.bind(globalThis), now = Date.now, cache = new BoundedCache({ now }),
+    diagnostics = record => console.warn('TfL request failed', record) } = {}) {
     this.appKey = appKey;
+    // Workers checks fetch's receiver. Storing the unbound global and calling
+    // this.fetch() makes the service its receiver and throws before any I/O.
     this.fetch = fetchImpl;
+    this.diagnostics = diagnostics;
     this.now = now;
     this.cache = cache;
     this.upstream = new TokenBucket({ now, capacity: 20, perMinute: 60 });
@@ -129,8 +133,11 @@ export class TflService {
     const url = new URL(path, 'https://api.tfl.gov.uk');
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     if (this.appKey) url.searchParams.set('app_key', this.appKey);
+    const startedAt = this.now();
+    let upstreamStatus = null;
     try {
       const response = await this.fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(9_000), redirect: 'error' });
+      upstreamStatus = response.status;
       if (!response.ok) {
         if (response.status === 429) {
           const retry = Number(response.headers.get('retry-after'));
@@ -144,6 +151,15 @@ export class TflService {
       if (text.length > 12_000_000) throw new HttpError(502, 'TfL returned an oversized response.');
       return JSON.parse(text);
     } catch (cause) {
+      // Log fixed categories only: exception messages, URLs, bodies and keys
+      // can contain secrets and must never enter either logs or API responses.
+      const category = upstreamStatus !== null && upstreamStatus >= 400 ? 'http-error'
+        : cause?.name === 'TimeoutError' || cause?.name === 'AbortError' ? 'timeout'
+        : cause instanceof SyntaxError ? 'invalid-json'
+        : cause?.message?.includes('Illegal invocation') ? 'invalid-fetch-receiver'
+        : 'network-or-runtime-error';
+      try { this.diagnostics({ category, upstreamStatus, elapsedMs: Math.max(0, this.now() - startedAt) }); }
+      catch { /* Diagnostics must not interfere with the error response. */ }
       if (cause instanceof HttpError) throw cause;
       this.backoffUntil = this.now() + 5_000;
       throw new HttpError(502, 'TfL data is temporarily unavailable.');

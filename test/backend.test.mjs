@@ -142,6 +142,35 @@ test('real service composition validates registry and uses different TfL endpoin
   assert.doesNotMatch(JSON.stringify(rail), /test-secret/);
 });
 
+test('default provider fetch keeps the global receiver required by Workers', async t => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', function () {
+    if (this !== globalThis) throw new TypeError('Illegal invocation');
+    calls++;
+    return Promise.resolve(response(tflLines));
+  });
+  const result = await new TflService().lines();
+  assert.equal(result.source, 'tfl');
+  assert.equal(result.data.length, 2);
+  assert.equal(calls, 1);
+});
+
+test('provider diagnostics retain failure categories without credentials or raw errors', async () => {
+  const records = [];
+  const service = new TflService({ appKey: 'private-test-key', diagnostics: record => records.push(record),
+    fetchImpl: async () => { throw new TypeError('Illegal invocation https://api.tfl.gov.uk?app_key=private-test-key'); } });
+  await assert.rejects(service.lines(), error => error.status === 502);
+  assert.equal(records[0].category, 'invalid-fetch-receiver');
+  assert.equal(records[0].upstreamStatus, null);
+  assert.doesNotMatch(JSON.stringify(records), /private-test-key|https:|app_key/);
+  const denied = new TflService({ diagnostics: record => records.push(record),
+    fetchImpl: async () => new Response('private upstream detail', { status: 403 }) });
+  await assert.rejects(denied.lines(), /access was declined/);
+  assert.equal(records[1].upstreamStatus, 403);
+  assert.equal(records[1].category, 'http-error');
+  assert.doesNotMatch(JSON.stringify(records), /private upstream detail/);
+});
+
 test('upstream 429 creates a shared backoff and failures never switch live mode to demo', async () => {
   let calls = 0;
   const service = new TflService({ now: () => now, fetchImpl: async () => { calls++; return new Response('', { status: 429, headers: { 'Retry-After': '60' } }); } });

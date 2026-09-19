@@ -2,7 +2,7 @@
 
 Date: 19 September 2026. Runtime: Node.js 24.19.0.
 
-Final result: all 24 automated tests and application syntax checks passed. The
+Final result: all 26 automated tests and application syntax checks passed. The
 demonstration HTTP server also served its HTML, JavaScript, CSS and map library
 with successful responses and the expected content types.
 
@@ -58,6 +58,22 @@ live TfL access.
 Live requests from the supervised preview returned 502, while direct application
 adapter checks in the development environment returned all 19 rail lines. This does
 not establish a provider outage or successful hosted live-feed access.
+
+## Deployed 502 correction
+
+The initial deployment returned 502 for `/api/lines` in 0–1 milliseconds. The
+provider stored the global `fetch` function without binding its receiver, then
+called it as `this.fetch(...)`. Node accepted this, while workerd threw
+`TypeError: Illegal invocation` before making an outbound request.
+
+A separate Miniflare/workerd reproduction confirmed the original call fails;
+direct global calls and `fetch.bind(globalThis)` succeed with the same
+`AbortSignal.timeout(9000)` options. The provider now binds its default fetch to
+`globalThis`. A new regression test failed before the fix and passed after it.
+Another test checks that diagnostic records include failure category and upstream
+status without URLs, raw exception messages, response bodies or API keys.
+
+Reference: [Cloudflare runtime invocation errors](https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors).
 
 ## Not verified
 
