@@ -5,7 +5,7 @@ A first, runnable foundation for a London counterpart to
 Scope includes London transit and TfL-supplied National Rail routes across England,
 with cross-border connections retained. This is an independent project, not a TfL product.
 
-## What the first version does
+## What the app does
 
 - Lists TfL rail lines and their reported service conditions.
 - Filters Underground, DLR, London Overground, Elizabeth line and National Rail operators.
@@ -13,7 +13,12 @@ with cross-border connections retained. This is an independent project, not a Tf
 - Opens with all supported rail routes together on one geographic network map.
 - Lets you select a line for its stations and boards, or switch to a focused line view.
 - Loads routes with a shared browser cache and two concurrent requests; a missing route can be retried without losing the others.
-- Opens a station arrival board from either the map or a keyboard-accessible list.
+- Searches loaded stations across the supported network, independently of map filters, and keeps exact service/stop choices separate.
+- Shows or hides individual services, with Show all / Hide all for the current filter.
+- Saves up to 50 station/service pairs on the current device, without an account or database.
+- Copies bookmarkable links containing the selected board, operator layers, mode and map camera; private-site access is unchanged.
+- Provides separate Map, Services, Stations and Board panels on phones, with keyboard-accessible station choices.
+- Opens a station arrival board from either the map or the station list.
 - Shows source, freshness, stale-data and unavailable states explicitly.
 - Offers a separate, clearly labelled demonstration mode for development.
 
@@ -22,8 +27,27 @@ sample data when a request fails. The demonstration dataset covers short sample 
 its geometry and predictions are illustrative and must not be used for travel.
 
 This starter does not yet include bus tracking, complete coverage of every rail operator/branch, trams, boats, journey
-planning, favourites or moving train markers. It is a first product slice, not feature
+planning or moving train markers. It is a first product slice, not feature
 parity with the mature NYC application.
+
+## Exploring and saving views
+
+Start in **All stations** and type a station name. Results build as supported routes
+load, with an explicit coverage count and retry control. Different stop IDs remain
+separate even at the same interchange; shared IDs show each route that reports them.
+Use **Selected service** for one operator’s station list, or **Saved stations** to
+reopen a saved board. National route coverage is still incomplete.
+
+The service checkboxes control the network map; the mode buttons also narrow visible
+layers. Line-name search narrows the service list and its Show all / Hide all actions.
+The focused **Selected line** view displays that line regardless of network checkboxes.
+Search can reopen a hidden service and reveal it on the map.
+
+**Save station** stores the exact station and service in this browser. Clearing browser
+data removes saved stations; they do not sync between devices. **Copy view link** captures
+the current map position and service selection. The link can be bookmarked, but it does
+not grant access to the private site. Unknown or removed station IDs show an explicit
+message rather than substituting a different board.
 
 ## Run locally
 

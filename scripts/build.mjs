@@ -9,6 +9,7 @@ const publicFiles = {
   'index.html': 'text/html; charset=utf-8',
   'app.js': 'text/javascript; charset=utf-8',
   'lib.mjs': 'text/javascript; charset=utf-8',
+  'explorer.mjs': 'text/javascript; charset=utf-8',
   'network.mjs': 'text/javascript; charset=utf-8',
   'style.css': 'text/css; charset=utf-8',
   'vendor/leaflet/leaflet.js': 'text/javascript; charset=utf-8',

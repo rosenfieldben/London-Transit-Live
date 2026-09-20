@@ -39,9 +39,11 @@ an explicit unavailable/empty state; no stale or simulated values appear current
 ## Stage 2 — Make the map a network explorer
 
 Multiple simultaneous line layers and Thameslink are implemented, with network/line
-views, mode filters, partial-route recovery and shared geometry caching. Next add
-station interchange grouping, broader station search, saved stations, step-free
-information with field-level provenance, and trams.
+views, mode filters, partial-route recovery and shared geometry caching. Network-wide
+search, exact-ID station grouping, individual operator visibility, device-local saved
+stations, bookmarkable views and mobile panel navigation are now implemented. Next add
+verified cross-mode interchange relationships, step-free information with field-level
+provenance, and trams.
 Keep station/platform identifiers separate; a station complex can contain different
 stop IDs for different operators and modes. Do not infer accessibility from a coordinate
 or a station name. Maintain an equally capable keyboard path.
@@ -85,3 +87,10 @@ These are starting decisions, not constraints on where the project can grow.
 
 The map has London/England controls and retains cross-border route endpoints.
 Do not describe the current TfL map as every operator’s complete network.
+
+## National geometry next step
+
+A licensed nationwide timetable feed is needed to establish complete operator service
+patterns. Station and track geometry cannot establish which operator serves a route.
+Evaluate the timetable subscription separately from the live departure-board product
+when Marketplace access arrives. See [the source assessment](NATIONAL-GEOMETRY.md).

@@ -149,3 +149,29 @@ has been performed. Snapshot replay code/data were removed before committing.
 The RDM adapter has only controlled-response verification, not production authentication.
 TfL operator geometry is incomplete for some operators (notably CrossCountry); do not
 claim complete nationwide track/service coverage from this dataset.
+
+
+## Station explorer update — 20 September 2026
+
+- Added automated coverage for exact-ID station grouping, route-derived operator
+  membership, distinct high/low-level stops, search aliases and prefix matching,
+  bounded/corrupt favourites, fragment validation and view-state round trips.
+- The built Worker integration check now requests the new public explorer module,
+  in addition to exercising the TfL and National Rail contracts in workerd.
+- Browser QA used a visibly labelled local DEMO harness with the previously observed
+  25 national route geometries and five London sample routes. It loaded 30/30 routes
+  and indexed 2,493 distinct station IDs. This is not evidence of current live boards.
+- Exercised global York/Newcastle search, exact LNER boards, explicit National Rail
+  not-connected states, saving/reloading York, back/forward between stations, custom
+  LNER + Thameslink visibility, hide/reopen of the selected service, focused-line view
+  and copying the view link.
+- Reviewed the 390px responsive layout in a same-origin preview frame and selected
+  London Bridge/Jubilee using the keyboard. The Board panel opened with labelled
+  demo predictions. This is a responsive browser check, not a physical-device or
+  assistive-technology audit. No preview fixture or relaxed preview frame policy is
+  included in production.
+- Real National Rail credentials, broader licensed timetable coverage, a full screen
+  reader audit and representative live-service checks remain outstanding.
+
+Final verification: 50 unit/API tests and 2 built-Worker integration tests passed,
+along with the JavaScript syntax checks and production build.
