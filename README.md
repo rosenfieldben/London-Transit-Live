@@ -11,7 +11,8 @@ with cross-border connections retained. This is an independent project, not a Tf
 - Filters Underground, DLR, London Overground, Elizabeth line and National Rail operators.
 - Switches between London and England map areas, with 44 lines/operators observed in the provider registry.
 - Opens with all supported rail routes together on one geographic network map.
-- Lets you select a line for its stations and boards, or switch to a focused line view.
+- Automatically focuses and fits a selected service. Visibility and mode changes fit the combined routes currently shown.
+- Uses a quiet basemap, strong route outlines and spaced station markers, with station labels appearing as you zoom in.
 - Loads routes with a shared browser cache and two concurrent requests; a missing route can be retried without losing the others.
 - Searches loaded stations across the supported network, independently of map filters, and keeps exact service/stop choices separate.
 - Shows or hides individual services, with Show all / Hide all for the current filter.
@@ -40,8 +41,18 @@ reopen a saved board. National route coverage is still incomplete.
 
 The service checkboxes control the network map; the mode buttons also narrow visible
 layers. Line-name search narrows the service list and its Show all / Hide all actions.
-The focused **Selected line** view displays that line regardless of network checkboxes.
-Search can reopen a hidden service and reveal it on the map.
+Selecting a service opens **Focus line**, isolates its route and fits its full mapped extent.
+Changing checkboxes or mode returns to **Network map** and fits the visible combination.
+The focused view displays its line regardless of network checkboxes.
+Search can reopen a hidden service and reveal it on the map. Manual pan/zoom cancels
+pending automatic fits; polling and hidden-route loading do not recenter the map.
+London/England are overview shortcuts. Use **Fit visible routes** or **Fit selected line**
+to frame the current selection again. Saved camera positions take precedence on reload.
+
+Station dots are spaced on screen at wider zoom levels. More local stops and labels
+appear as you zoom in; the complete station list remains searchable. Repeated exact
+route segments are painted once per service without inventing connections or
+simplifying the provider coordinates.
 
 **Save station** stores the exact station and service in this browser. Clearing browser
 data removes saved stations; they do not sync between devices. **Copy view link** captures

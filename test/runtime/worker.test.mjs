@@ -23,6 +23,9 @@ test('built Worker requests and normalizes TfL data in the hosting runtime', asy
   const explorer = await runtime.dispatchFetch('http://localhost/explorer.mjs');
   assert.equal(explorer.status, 200);
   assert.match(await explorer.text(), /function stationIndex/);
+  const mapModule = await runtime.dispatchFetch('http://localhost/map.mjs');
+  assert.equal(mapModule.status, 200);
+  assert.match(await mapModule.text(), /class AutoFrame/);
   const response = await runtime.dispatchFetch('http://localhost/api/lines');
   assert.equal(response.status, 200);
   const result = await response.json();

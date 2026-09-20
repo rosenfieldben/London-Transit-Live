@@ -28,7 +28,7 @@
     <main class="workspace">
       <aside class="network-panel panel" aria-labelledby="network-heading">
         <div class="panel-heading"><div><p class="eyebrow">01 / THE NETWORK</p><h1 id="network-heading" tabindex="-1">Service overview</h1></div><span class="small-icon" aria-hidden="true">↗</span></div>
-        <p class="panel-intro">Tick services to show them on the network map. Select a name for stations and service status.</p>
+        <p class="panel-intro">Select a service to focus its route. Tick services to compare them on the map.</p>
         <div id="mode-filters" class="mode-filters" aria-label="Filter lines by transport mode"></div>
         <label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="line-search" type="search" placeholder="Search lines and operators" aria-label="Search lines and operators" autocomplete="off" /></label>
         <div id="layer-actions" class="layer-actions" role="group" aria-label="Map visibility for services matching the filters"><span>Matching services:</span><button type="button" data-layers="show">Show all</button><button type="button" data-layers="hide">Hide all</button></div>
@@ -38,12 +38,12 @@
       </aside>
 
       <section class="map-panel" aria-labelledby="route-title">
-        <div class="route-heading"><div><p class="eyebrow">02 / EXPLORE THE NETWORK</p><h2 id="route-title" tabindex="-1">England rail network</h2><p id="route-subtitle">Select a line or operator to see stations.</p></div><span id="route-color" class="route-color" aria-hidden="true"></span></div>
-        <div class="map-toolbar"><div id="map-area-controls" class="map-view-controls" role="group" aria-label="Map area"><button type="button" data-area="london" aria-pressed="false">London</button><button type="button" data-area="england" aria-pressed="true">England</button></div><div id="map-view-controls" class="map-view-controls" role="group" aria-label="Map view"><button type="button" data-view="network" aria-pressed="true">Network map</button><button type="button" data-view="line" aria-pressed="false">Selected line</button></div></div>
+        <div class="route-heading"><div><p class="eyebrow">02 / EXPLORE THE NETWORK</p><h2 id="route-title" tabindex="-1">Rail network</h2><p id="route-subtitle">Choose a service to focus its route.</p></div><span id="route-color" class="route-color" aria-hidden="true"></span></div>
+        <div class="map-toolbar"><div id="map-area-controls" class="map-view-controls" role="group" aria-label="Zoom to area"><button type="button" data-area="london">London</button><button type="button" data-area="england">England</button></div><div id="map-view-controls" class="map-view-controls" role="group" aria-label="Map view"><button type="button" data-view="network" aria-pressed="true">Network map</button><button type="button" data-view="line" aria-pressed="false">Focus line</button></div></div>
         <div id="network-progress" class="network-progress"><span id="network-progress-text">Loading network routes…</span><button id="retry-network" type="button" class="text-button" hidden>Retry missing routes</button></div>
         <div id="route-status" class="route-status" hidden></div>
         <div class="map-wrap"><div id="map" aria-label="Rail network map. Select a line to reveal stations. The line and station lists provide keyboard access."></div><div id="map-loading" class="map-message"><span class="spinner" aria-hidden="true"></span><span>Preparing your map…</span></div><div id="tile-notice" class="tile-notice" hidden>Street map unavailable. Route and station markers remain usable.</div><div class="map-label"><span class="map-label-dot"></span><span id="map-caption">NETWORK VIEW</span></div></div>
-        <div class="map-footer"><span><span class="legend-station"></span>Line stations</span><span><span class="legend-selected"></span>Selected station</span><button id="fit-route" class="text-button" type="button" disabled>Fit network <span aria-hidden="true">↗</span></button></div>
+        <div class="map-footer"><span id="map-fit-note">Zoom follows service changes</span><button id="fit-route" class="text-button" type="button" disabled>Fit visible routes</button></div><div class="map-legend"><span><span class="legend-station"></span>Line stations</span><span><span class="legend-selected"></span>Selected station</span><span>More stations appear as you zoom in</span></div>
         <p class="map-coverage">TfL-supplied routes across England, with cross-border connections. Operator coverage can be incomplete; routes are not exact tracks or a current timetable. National Rail boards need a separate live connection.</p>
       </section>
 

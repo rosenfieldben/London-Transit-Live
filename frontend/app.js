@@ -1,11 +1,14 @@
 import { londonTime, isStale, isPredictionStale, currentPredictions, arrivalTiming, lineCondition, safeColor, escapeHTML as e } from './lib.mjs';
 import { RouteStore, visibleLines, networkSummary } from './network.mjs';
+import { routeBounds, distinctPaths, AutoFrame, spacedStations, stationLabels } from './map.mjs';
 import { stationIndex, searchStations, favouriteKey, readFavourites, parseView, viewHash } from './explorer.mjs';
 
 const $ = id => document.getElementById(id);
 const state = { config: null, lines: [], linesEnvelope: null, mode: 'all', lineId: null, route: null, routeEnvelope: null, stationId: null, arrivals: null, lineSearch: '', stationSearch: '', routeLoading: false, arrivalLoading: false, routeError: '', arrivalError: '', lineError: '', routeSeq: 0, arrivalSeq: 0, lineSeq: 0, arrivalController: null, demo: false, mapView: 'network', mapArea: 'england', networkRoutes: new Map(), networkErrors: new Map(), networkPending: new Set(), hiddenLines: new Set(), stationScope: 'all', index: [], favourites: [], restoring: false, navigationSeq: 0 };
 const modeNames = { tube: 'Underground', dlr: 'DLR', overground: 'Overground', 'elizabeth-line': 'Elizabeth line', 'national-rail': 'National Rail', tram: 'Tram' };
-let map, routeLayers, networkLayers, tileFailures = 0;
+let map, routeLayers, networkLayers, stationLayers, tileFailures = 0;
+const autoFrame = new AutoFrame();
+let programmaticCamera = false;
 const markers = new Map();
 const networkGroups = new Map();
 const favouritesStorage = 'london-transit-live:favourites:v1';
@@ -33,11 +36,12 @@ function renderNetworkProgress() {
   const summary = networkSummary(mappedLines(), state.networkRoutes, state.networkErrors);
   const loading = mappedLines().some(item => state.networkPending.has(item.id));
   $('network-progress').hidden = state.mapView !== 'network';
-  $('network-progress-text').textContent = `${summary.loaded} of ${summary.total} visible routes loaded${loading ? ' · Loading…' : ''}${summary.failed ? ` · ${summary.failed} unavailable` : ''}${summary.stale ? ` · ${summary.stale} saved routes` : ''}`;
+  $('network-progress-text').textContent = `${summary.loaded} of ${summary.total} routes${loading ? ' · Loading…' : ''}${summary.failed ? ` · ${summary.failed} unavailable` : ''}${summary.stale ? ` · ${summary.stale} saved routes` : ''}`;
   $('retry-network').hidden = !summary.failed;
   $('retry-network').disabled = loading;
   if (state.mapView === 'network') {
-    $('map-loading').hidden = Boolean(summary.loaded) || !summary.total;
+    $('map-loading').hidden = Boolean(summary.loaded);
+    if (!summary.total) $('map-loading').innerHTML = empty('No routes selected.', 'Tick a service in the service overview to show it on the map.');
     if (!summary.loaded && summary.total) $('map-loading').innerHTML = loading
       ? '<span class="spinner" aria-hidden="true"></span><span>Loading network routes…</span>'
       : empty('Network routes are unavailable.', 'Use Retry missing routes above to reconnect.');
@@ -59,6 +63,7 @@ function ensureNetworkRoutes(retry = false) {
     }).finally(() => {
       state.networkPending.delete(item.id); refreshIndex();
       if (state.mapView === 'network') { drawNetwork(); renderNetworkProgress(); }
+      tryAutoFrame();
     });
   }
   renderNetworkProgress();
@@ -67,6 +72,8 @@ function ensureNetworkRoutes(retry = false) {
 function drawNetwork() {
   if (!map || !networkLayers) return;
   const visible = new Set(mappedLines().map(item => item.id));
+  const focused = visible.has(state.lineId);
+  const crowded = visible.size > 8;
   for (const [id, entry] of networkGroups) if (!visible.has(id)) { networkLayers.removeLayer(entry.group); networkGroups.delete(id); }
   if (state.mapView !== 'network') return;
   for (const item of mappedLines()) {
@@ -76,10 +83,10 @@ function drawNetwork() {
     if (!entry || entry.envelope !== envelope || entry.color !== item.color) {
       if (entry) networkLayers.removeLayer(entry.group);
       entry = { envelope, color: item.color, group: L.featureGroup(), strokes: [] };
-      for (const path of envelope.data.paths || []) {
+      for (const path of distinctPaths(envelope.data.paths)) {
         if (path.length < 2) continue;
-        const casing = L.polyline(path, { color: '#fff', weight: 5, opacity: .75, interactive: false }).addTo(entry.group);
-        const stroke = L.polyline(path, { color: safeColor(item.color), weight: 2.5, opacity: .9 }).addTo(entry.group);
+        const casing = L.polyline(path, { color: '#fff', weight: 7, opacity: .94, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(entry.group);
+        const stroke = L.polyline(path, { color: safeColor(item.color), weight: 4, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(entry.group);
         const label = document.createElement('span'); label.textContent = `${item.name}${envelope.stale ? ' · saved route' : ''}`;
         stroke.bindTooltip(label, { sticky: true }).on('click', () => chooseService(item.id));
         entry.strokes.push({ casing, stroke });
@@ -88,21 +95,22 @@ function drawNetwork() {
     }
     const selected = item.id === state.lineId;
     for (const { casing, stroke } of entry.strokes) {
-      casing.setStyle({ weight: selected ? 7 : 5 });
-      stroke.setStyle({ weight: selected ? 4 : 2.5, opacity: state.lineId && !selected ? .65 : .9 });
+      casing.setStyle({ weight: selected ? 10 : crowded ? 5 : 7, opacity: focused && !selected ? .38 : .96 });
+      stroke.setStyle({ weight: selected ? 5.5 : crowded ? 2.5 : 4, opacity: focused && !selected ? .25 : .95 });
     }
   }
   networkGroups.get(state.lineId)?.group.bringToFront();
   if (visible.has(state.lineId)) routeLayers.addTo(map); else routeLayers.remove();
+  drawStationMarkers();
   $('fit-route').disabled = !networkLayers.getLayers().length;
 }
 
-function setMapView(view) {
+function setMapView(view, { frame = true, writeHistory = true } = {}) {
   cancelRestoration();
-  if (view === state.mapView) return;
+  if (view === state.mapView) { if (frame) requestAutoFrame(); return; }
   state.mapView = view;
   [...$('map-view-controls').querySelectorAll('button')].forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === view)));
-  $('fit-route').textContent = view === 'network' ? 'Fit network ↗' : 'Fit line ↗';
+  $('fit-route').textContent = view === 'network' ? 'Fit visible routes' : 'Fit selected line';
   if (networkLayers) { if (view === 'network') networkLayers.addTo(map); else networkLayers.remove(); }
   drawRoute(); renderRouteHeading();
   if (view === 'network') { ensureNetworkRoutes(); drawNetwork(); renderNetworkProgress(); }
@@ -112,7 +120,8 @@ function setMapView(view) {
     if (!state.route) $('map-loading').innerHTML = state.routeLoading ? empty('Loading route and stations…') : state.routeError ? empty('The route could not be loaded.', state.routeError, 'route') : empty('Choose a line.', 'Select a line from the service overview.');
     $('fit-route').disabled = !routeLayers?.getLayers().length;
   }
-  fitRoute(); saveView();
+  if (frame) requestAutoFrame();
+  if (writeHistory) saveView();
 }
 
 function announce(message) { $('announcer').textContent = message; }
@@ -172,10 +181,10 @@ function renderLines() {
 }
 
 function renderRouteHeading() {
-  const selected = line();
+  const selected = state.mapView === 'line' || mappedLines().some(item => item.id === state.lineId) ? line() : null;
   if (state.mapView === 'network') {
-    $('route-title').textContent = state.mapArea === 'england' ? 'England rail network' : 'London rail network';
-    $('route-subtitle').textContent = `${mappedLines().length} visible services · Select a line or operator for stations`;
+    $('route-title').textContent = 'Rail network';
+    $('route-subtitle').textContent = `${mappedLines().length} ${mappedLines().length === 1 ? 'service' : 'services'} shown${selected && mappedLines().some(item => item.id === selected.id) ? ` · ${selected.name} highlighted` : ''}`;
     $('map-caption').textContent = `${state.demo ? 'SAMPLE NETWORK' : 'NETWORK VIEW'}${selected ? ` / ${selected.name.toUpperCase()}` : ''}`;
   }
   if (!selected) { $('route-status').hidden = true; if (state.mapView === 'line') { $('route-title').textContent = 'Choose a line'; $('route-subtitle').textContent = 'Select a line from the service overview.'; $('map-caption').textContent = 'LINE VIEW'; } return; }
@@ -224,54 +233,102 @@ async function loadLines(initial = false) {
 
 function initializeMap() {
   if (!window.L) { $('map').parentElement.classList.add('map-disabled'); $('map-loading').innerHTML = empty('Map unavailable.', 'You can still choose stations and view arrivals from the station list.'); return; }
-  map = L.map('map', { zoomControl: true, scrollWheelZoom: false, zoomSnap: .25, zoomDelta: .5 }).fitBounds([[49.85, -5.9], [55.82, 1.85]], { padding: [15, 15], animate: false });
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19 }).on('tileerror', () => { tileFailures++; if (tileFailures >= 2) $('tile-notice').hidden = false; }).addTo(map);
+  map = L.map('map', { zoomControl: true, scrollWheelZoom: false, zoomSnap: .25, zoomDelta: .5, minZoom: 4, maxZoom: 18, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false }).fitBounds([[49.85, -5.9], [55.82, 1.85]], { padding: [15, 15], animate: false });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19, className: 'quiet-basemap' }).on('tileerror', () => { tileFailures++; if (tileFailures >= 2) $('tile-notice').hidden = false; }).addTo(map);
   networkLayers = L.featureGroup().addTo(map);
   routeLayers = L.featureGroup().addTo(map);
-  new ResizeObserver(() => map.invalidateSize({ animate: false })).observe($('map'));
+  stationLayers = L.featureGroup().addTo(routeLayers);
+  map.on('moveend zoomend', drawStationMarkers);
+  const explore = () => { if (!programmaticCamera) { cancelRestoration(); autoFrame.cancel(); $('map-fit-note').textContent = 'Free explore · change services to fit again'; } };
+  map.on('dragstart', explore);
+  $('map').addEventListener('pointerdown', explore);
+  $('map').addEventListener('wheel', explore, { passive: true });
+  $('map').addEventListener('keydown', event => { if (['+', '-', '=', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key) || (['Enter', ' '].includes(event.key) && event.target.closest('.leaflet-control-zoom'))) explore(); });
+  new ResizeObserver(() => { map.invalidateSize({ animate: false }); tryAutoFrame(); drawStationMarkers(); }).observe($('map'));
 }
 
 function drawRoute() {
   markers.clear();
   if (!map) { $('map-loading').innerHTML = empty('Map unavailable.', 'Choose a station from the list to see its arrivals.'); return; }
-  routeLayers.clearLayers();
+  routeLayers.clearLayers(); stationLayers.clearLayers(); stationLayers.addTo(routeLayers);
   const color = safeColor(line()?.color);
   routeLayers.addTo(map);
-  for (const path of state.mapView === 'line' ? state.route?.paths || [] : []) {
-    const coordinates = path.filter(point => Array.isArray(point) && point.length >= 2 && Number.isFinite(point[0]) && Number.isFinite(point[1]));
-    if (coordinates.length > 1) { L.polyline(coordinates, { color: '#fff', weight: 8, opacity: .92, interactive: false }).addTo(routeLayers); L.polyline(coordinates, { color, weight: 4, opacity: .95, interactive: false }).addTo(routeLayers); }
-  }
-  for (const stop of state.route?.stations || []) {
-    if (!Number.isFinite(stop.lat) || !Number.isFinite(stop.lon)) continue;
-    const marker = L.marker([stop.lat, stop.lon], { icon: stationIcon(stop.id === state.stationId), zIndexOffset: stop.id === state.stationId ? 1000 : 0, title: `${stop.name}: show arrivals`, alt: `${stop.name}: show arrivals`, keyboard: false }).addTo(routeLayers);
-    const tooltip = document.createElement('span'); tooltip.textContent = stop.name;
-    marker.bindTooltip(tooltip, { direction: 'top', offset: [0, -7] });
+  const paths = state.mapView === 'line' ? distinctPaths(state.route?.paths) : [];
+  for (const path of paths) L.polyline(path, { color: '#fff', weight: 10, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayers);
+  for (const path of paths) L.polyline(path, { color, weight: 5.5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayers);
+  if (state.mapView === 'network' && !mappedLines().some(item => item.id === state.lineId)) routeLayers.remove();
+  drawStationMarkers();
+  $('fit-route').disabled = !routeBounds(state.route ? [state.route] : []);
+  $('map-loading').hidden = true;
+  if (state.mapView === 'line' && !routeBounds(state.route ? [state.route] : [])) { $('map-loading').hidden = false; $('map-loading').innerHTML = empty('No route geometry is available.', 'Use the station list to explore this line.'); }
+}
+
+function drawStationMarkers() {
+  if (!map || !stationLayers) return;
+  stationLayers.clearLayers(); markers.clear();
+  if (!state.route || (state.mapView === 'network' && !mappedLines().some(item => item.id === state.lineId))) return;
+  const size = map.getSize(), zoom = map.getZoom();
+  if (!size.x || !size.y) return;
+  const points = state.route.stations.filter(stop => Number.isFinite(stop.lat) && Number.isFinite(stop.lon)).map(stop => {
+    const point = map.latLngToContainerPoint([stop.lat, stop.lon]);
+    return { ...stop, x: point.x, y: point.y };
+  });
+  const visible = spacedStations(points, state.stationId, { width: size.x, height: size.y, gap: zoom < 9 ? 28 : 17 });
+  const labels = stationLabels(visible, state.stationId, { width: size.x, height: size.y, zoom });
+  for (const stop of visible) {
+    const selected = stop.id === state.stationId;
+    const marker = L.marker([stop.lat, stop.lon], { icon: stationIcon(selected, zoom), zIndexOffset: selected ? 1000 : 0, title: `${stop.name}: show arrivals`, alt: `${stop.name}: show arrivals`, keyboard: false }).addTo(stationLayers);
+    const tooltip = document.createElement('span'); tooltip.textContent = stop.name.replace(/ (Rail|Underground|DLR) Station$/, '');
+    const direction = labels.get(stop.id);
+    marker.bindTooltip(tooltip, { permanent: Boolean(direction), direction: direction || 'top', offset: direction ? [direction === 'left' ? -9 : 9, 0] : [0, -6], className: direction ? `station-name-label${selected ? ' selected-label' : ''}` : '', opacity: 1 });
     marker.on('click', () => selectStation(stop.id, true));
     markers.set(stop.id, marker);
   }
-  $('fit-route').disabled = !routeLayers.getLayers().length;
-  if (state.mapView === 'network' && !mappedLines().some(item => item.id === state.lineId)) routeLayers.remove();
-  $('map-loading').hidden = true;
-  if (state.mapView === 'line' && !routeLayers.getLayers().length) { $('map-loading').hidden = false; $('map-loading').innerHTML = empty('No route geometry is available.', 'Use the station list to explore this line.'); }
 }
 
-function stationIcon(selected) {
-  return L.divIcon({ className: '', html: `<span class="station-marker${selected ? ' selected' : ''}" style="--marker-color:${safeColor(line()?.color)}"></span>`, iconSize: selected ? [18, 18] : [12, 12], iconAnchor: selected ? [9, 9] : [6, 6] });
+function stationIcon(selected, zoom = map?.getZoom() || 10) {
+  const size = selected ? 16 : zoom < 9 ? 7 : 10;
+  return L.divIcon({ className: '', html: `<span class="station-marker${selected ? ' selected' : ''}" style="--marker-color:${safeColor(line()?.color)};width:${size}px;height:${size}px"></span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+}
+function mapFrame() {
+  const ids = state.mapView === 'line' ? state.lineId ? [state.lineId] : [] : mappedLines().map(item => item.id).sort();
+  return { key: `${state.mapView}:${ids.join(',')}`, bounds: routeBounds(ids.map(id => state.networkRoutes.get(id)?.data)), pending: ids.some(id => state.networkPending.has(id) || (id === state.lineId && state.routeLoading) || (!state.networkRoutes.has(id) && !state.networkErrors.has(id) && !(id === state.lineId && state.routeError))) };
+}
+function applyMapBounds(bounds) {
+  if (!map || !bounds) return;
+  map.invalidateSize({ animate: false });
+  const small = map.getSize().x < 500;
+  programmaticCamera = true;
+  map.fitBounds(bounds, { paddingTopLeft: small ? [28, 35] : [48, 40], paddingBottomRight: small ? [28, 65] : [48, 65], maxZoom: 14, animate: false });
+  programmaticCamera = false;
+}
+function requestAutoFrame({ writeHistory = true } = {}) {
+  if (writeHistory) saveView();
+  autoFrame.request(mapFrame().key);
+  $('map-fit-note').textContent = state.mapView === 'line' ? 'Fitting the selected line' : 'Fitting visible routes';
+  tryAutoFrame();
+}
+function tryAutoFrame() {
+  if (!map || !autoFrame.intent || state.restoring || $('map').clientWidth < 20 || $('map').clientHeight < 20) return;
+  const target = mapFrame(), bounds = autoFrame.take(target.key, target.bounds, target.pending);
+  if (bounds) { applyMapBounds(bounds); saveView(true); }
+  if (!autoFrame.intent) $('map-fit-note').textContent = 'Zoom follows service changes';
 }
 function fitRoute() {
-  const layers = state.mapView === 'network' ? networkLayers : routeLayers;
-  if (map && layers?.getLayers().length) map.fitBounds(layers.getBounds(), { padding: [35, 35], maxZoom: 14, animate: false });
+  autoFrame.cancel();
+  applyMapBounds(mapFrame().bounds);
+  $('map-fit-note').textContent = 'Zoom follows service changes';
 }
 
 async function selectLine(id, { restoring = false, writeHistory = true } = {}) {
   if (!state.lines.some(item => item.id === id)) return false;
   if (!restoring) { state.restoring = false; ++state.navigationSeq; }
-  if (id === state.lineId && state.route && !state.routeError) { renderLines(); renderStations(); drawNetwork(); renderNetworkProgress(); if (writeHistory) saveView(); return true; }
+  if (id === state.lineId && state.route && !state.routeError) { renderLines(); renderStations(); drawNetwork(); renderNetworkProgress(); if (!restoring && writeHistory) requestAutoFrame(); if (writeHistory) saveView(); return true; }
   state.arrivalController?.abort();
   const seq = ++state.routeSeq; ++state.arrivalSeq;
   state.lineId = id; state.route = null; state.routeEnvelope = null; state.stationId = null; state.arrivals = null; state.routeLoading = true; state.arrivalLoading = false; state.routeError = ''; state.arrivalError = '';
   routeLayers?.clearLayers(); markers.clear(); $('fit-route').disabled = true;
-  renderLines(); renderStations(); renderArrivals(); if (writeHistory) saveView();
+  renderLines(); renderStations(); renderArrivals(); if (!restoring && writeHistory) requestAutoFrame(); if (writeHistory) saveView();
   if (state.mapView === 'line') { $('map-loading').hidden = false; $('map-loading').innerHTML = '<span class="spinner" aria-hidden="true"></span><span>Loading route and stations…</span>'; }
   else { drawNetwork(); renderNetworkProgress(); }
   try {
@@ -281,7 +338,7 @@ async function selectLine(id, { restoring = false, writeHistory = true } = {}) {
     state.route = result.data; state.routeEnvelope = result; state.routeLoading = false;
     state.networkRoutes.set(id, result); state.networkErrors.delete(id);
     noteSource(result); refreshIndex(); renderRouteHeading(); drawRoute();
-    if (state.mapView === 'line') fitRoute();
+    tryAutoFrame();
     if (writeHistory) saveView(true);
     if (state.mapView === 'network') { drawNetwork(); renderNetworkProgress(); }
     announce(`${line()?.name || 'Line'} selected. ${result.data.stations.length} stations available.`);
@@ -290,7 +347,7 @@ async function selectLine(id, { restoring = false, writeHistory = true } = {}) {
     if (error.name === 'AbortError' || seq !== state.routeSeq) return;
     state.routeLoading = false; state.routeError = error.message || 'Unable to load the route.';
     if (state.mapView === 'line') $('map-loading').innerHTML = empty('The route could not be loaded.', state.routeError, 'route');
-    renderStations(); announce('The route could not be loaded.');
+    renderStations(); tryAutoFrame(); announce('The route could not be loaded.');
   }
 }
 
@@ -343,11 +400,12 @@ async function selectStation(id, fromMap = false, restoring = false) {
   if (!restoring) { state.restoring = false; ++state.navigationSeq; }
   showPanel('board');
   if (id === state.stationId) { saveView(); return; }
-  const oldId = state.stationId;
+  autoFrame.cancel();
   state.arrivalController?.abort(); ++state.arrivalSeq;
   state.stationId = id; state.arrivals = null; state.arrivalError = ''; state.arrivalLoading = true;
-  if (markers.has(oldId)) markers.get(oldId).setIcon(stationIcon(false)).setZIndexOffset(0);
-  if (markers.has(id)) { markers.get(id).setIcon(stationIcon(true)); markers.get(id).setZIndexOffset(1000); if (!fromMap) map.panTo(markers.get(id).getLatLng(), { animate: false }); }
+  const stop = station();
+  if (map && stop && !fromMap && !restoring) map.setView([stop.lat, stop.lon], Math.max(map.getZoom(), 12), { animate: false });
+  drawStationMarkers();
   renderStations(); renderArrivals(); saveView(); announce(`${station()?.name || 'Station'} selected. Loading arrivals.`);
   await loadArrivals();
 }
@@ -422,9 +480,10 @@ function renderArrivalsContent() {
 }
 
 function chooseService(id) {
+  setMapView('line', { frame: false, writeHistory: false });
   state.hiddenLines.delete(id); state.stationScope = 'line'; $('station-scope').value = 'line';
   state.stationSearch = ''; $('station-search').value = '';
-  void selectLine(id); showPanel('stations');
+  void selectLine(id); showPanel('map');
 }
 function cancelRestoration() { state.restoring = false; ++state.navigationSeq; }
 function showViewMessage(message) {
@@ -436,7 +495,7 @@ function showPanel(panel) {
   if (matchMedia('(max-width: 700px)').matches) {
     const heading = $(panel === 'stations' ? 'stations-heading' : panel === 'board' ? 'arrivals-heading' : panel === 'services' ? 'network-heading' : 'route-title');
     heading.focus({ preventScroll: true });
-    if (panel === 'map') requestAnimationFrame(() => map?.invalidateSize({ animate: false }));
+    if (panel === 'map') requestAnimationFrame(() => { map?.invalidateSize({ animate: false }); tryAutoFrame(); drawStationMarkers(); });
   }
 }
 function saveView(replace = false) {
@@ -447,14 +506,14 @@ function saveView(replace = false) {
 }
 async function restoreView() {
   const requested = parseView(location.hash); const navigation = ++state.navigationSeq;
+  autoFrame.cancel();
   state.restoring = true; $('view-message').hidden = true;
   clearSelection();
   Object.assign(state, { mode: requested.mode, mapArea: requested.mapArea, hiddenLines: requested.hiddenLines });
   state.mapView = requested.mapView;
   renderModes(); renderLines();
-  for (const button of $('map-area-controls').querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset.area === state.mapArea));
   for (const button of $('map-view-controls').querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset.view === state.mapView));
-  $('fit-route').textContent = state.mapView === 'network' ? 'Fit network ↗' : 'Fit line ↗';
+  $('fit-route').textContent = state.mapView === 'network' ? 'Fit visible routes' : 'Fit selected line';
   if (networkLayers) state.mapView === 'network' ? networkLayers.addTo(map) : networkLayers.remove();
   if (requested.lineId) {
     if (!state.lines.some(item => item.id === requested.lineId)) showViewMessage('The service in this link is unavailable. Choose another service or station.');
@@ -477,6 +536,8 @@ async function restoreView() {
   if (!state.stationId) showPanel('map');
   if (state.mapView === 'line' && !state.route) { $('map-loading').hidden = false; $('map-loading').innerHTML = empty(state.routeError || 'Choose a line.', 'Use Services to select a route.'); }
   state.restoring = false;
+  if (!requested.camera && (state.mapView === 'line' || state.mapArea !== 'london')) requestAutoFrame({ writeHistory: false });
+  else $('map-fit-note').textContent = requested.camera ? 'Saved map view · change services to fit again' : 'London overview';
 }
 function persistFavourites() {
   try { localStorage.setItem(favouritesStorage, JSON.stringify({ version: 1, items: state.favourites })); return true; }
@@ -493,26 +554,26 @@ $('save-station').addEventListener('click', () => {
   const persisted = persistFavourites(); renderArrivals(); renderStations(); if (persisted) announce(saved ? 'Station removed from saved stations.' : 'Station saved on this device.');
 });
 $('copy-view').addEventListener('click', async () => {
-  cancelRestoration(); saveView(true);
+  cancelRestoration(); autoFrame.cancel(); saveView(true);
   try { await navigator.clipboard.writeText(location.href); announce('View link copied. This site remains private.'); $('copy-feedback').textContent = 'Link copied · Access remains private'; }
   catch { $('view-link-field').hidden = false; $('view-link').value = location.href; $('view-link').focus(); $('view-link').select(); $('copy-feedback').textContent = 'Copy the selected link'; }
 });
-$('mobile-navigation').addEventListener('click', event => { const panel = event.target.closest('[data-panel]')?.dataset.panel; if (panel) showPanel(panel); });
-document.querySelector('.skip-link').addEventListener('click', event => { event.preventDefault(); showPanel('stations'); $('station-search').focus(); });
+$('mobile-navigation').addEventListener('click', event => { const panel = event.target.closest('[data-panel]')?.dataset.panel; if (panel) { if (state.restoring) cancelRestoration(); showPanel(panel); } });
+document.querySelector('.skip-link').addEventListener('click', event => { event.preventDefault(); if (state.restoring) cancelRestoration(); showPanel('stations'); $('station-search').focus(); });
 $('retry-search').addEventListener('click', () => ensureNetworkRoutes(true));
 window.addEventListener('hashchange', restoreView);
 window.addEventListener('storage', event => { if (event.key === favouritesStorage) { state.favourites = readFavourites(event.newValue); renderStations(); renderArrivals(); } });
 
 $('mode-filters').addEventListener('click', event => {
   const button = event.target.closest('[data-mode]'); if (!button) return;
-  cancelRestoration(); state.mode = button.dataset.mode; renderModes(); renderLines(); drawNetwork(); renderNetworkProgress(); saveView();
+  cancelRestoration(); state.mode = button.dataset.mode; setMapView('network', { frame: false, writeHistory: false }); renderModes(); renderLines(); drawNetwork(); renderNetworkProgress(); requestAutoFrame(); saveView();
 });
 $('line-search').addEventListener('input', event => { state.lineSearch = event.target.value; renderLines(); });
 $('station-search').addEventListener('input', event => { state.stationSearch = event.target.value; renderStations(); });
 $('station-scope').addEventListener('change', event => { state.stationScope = event.target.value; renderStations(); });
 $('line-list').addEventListener('click', event => { const button = event.target.closest('[data-line]'); if (button) chooseService(button.dataset.line); });
-$('line-list').addEventListener('change', event => { const id = event.target.dataset.layer; if (!id) return; cancelRestoration(); event.target.checked ? state.hiddenLines.delete(id) : state.hiddenLines.add(id); drawNetwork(); renderNetworkProgress(); renderRouteHeading(); saveView(); });
-$('layer-actions').addEventListener('click', event => { const action = event.target.closest('[data-layers]')?.dataset.layers; if (!action) return; cancelRestoration(); for (const item of filteredLines()) action === 'show' ? state.hiddenLines.delete(item.id) : state.hiddenLines.add(item.id); renderLines(); drawNetwork(); renderNetworkProgress(); saveView(); });
+$('line-list').addEventListener('change', event => { const id = event.target.dataset.layer; if (!id) return; cancelRestoration(); event.target.checked ? state.hiddenLines.delete(id) : state.hiddenLines.add(id); setMapView('network', { frame: false, writeHistory: false }); drawNetwork(); renderNetworkProgress(); renderRouteHeading(); requestAutoFrame(); saveView(); });
+$('layer-actions').addEventListener('click', event => { const action = event.target.closest('[data-layers]')?.dataset.layers; if (!action) return; cancelRestoration(); for (const item of filteredLines()) action === 'show' ? state.hiddenLines.delete(item.id) : state.hiddenLines.add(item.id); setMapView('network', { frame: false, writeHistory: false }); renderLines(); drawNetwork(); renderNetworkProgress(); requestAutoFrame(); saveView(); });
 $('station-list').addEventListener('click', event => {
   const remove = event.target.closest('[data-remove-favourite]');
   if (remove) { state.favourites = state.favourites.filter(item => favouriteKey(item) !== remove.dataset.removeFavourite); persistFavourites(); renderStations(); renderArrivals(); return; }
@@ -521,10 +582,10 @@ $('station-list').addEventListener('click', event => {
 $('fit-route').addEventListener('click', () => { cancelRestoration(); fitRoute(); saveView(); });
 $('map-area-controls').addEventListener('click', event => {
   const area = event.target.closest('[data-area]')?.dataset.area; if (!area) return;
-  cancelRestoration(); state.mapArea = area;
-  [...$('map-area-controls').querySelectorAll('button')].forEach(button => button.setAttribute('aria-pressed', String(button.dataset.area === area)));
-  if (state.mapView !== 'network') setMapView('network');
+  cancelRestoration(); autoFrame.cancel(); state.mapArea = area;
+  if (state.mapView !== 'network') setMapView('network', { frame: false, writeHistory: false });
   if (map) { if (area === 'london') map.setView([51.5074, -0.1278], 11, { animate: false }); else map.fitBounds([[49.85, -5.9], [55.82, 1.85]], { padding: [15, 15], animate: false }); }
+  $('map-fit-note').textContent = area === 'london' ? 'London overview' : 'England overview';
   renderRouteHeading(); saveView();
 });
 $('map-view-controls').addEventListener('click', event => { const view = event.target.closest('[data-view]')?.dataset.view; if (view) setMapView(view); });
@@ -541,13 +602,14 @@ document.addEventListener('visibilitychange', () => {
 function updateClock() { $('london-clock').textContent = londonTime(); }
 
 async function start() {
+  const bootNavigation = state.navigationSeq; state.restoring = true;
   initializeMap(); updateClock();
   try { state.config = await request('/api/config'); noteSource(null); renderModes(); if (state.config.attribution) $('data-attribution').textContent = state.config.attribution; }
   catch { $('global-error').hidden = false; $('global-error').textContent = 'App settings could not be loaded. Available network data will still be shown.'; }
   renderStations(); renderArrivals();
-  state.restoring = true;
   await loadLines(true);
-  await restoreView();
+  if (state.navigationSeq === bootNavigation) await restoreView();
+  else state.restoring = false;
   ensureNetworkRoutes();
   setInterval(() => { if (!document.hidden) loadLines(); }, 60000);
   setInterval(() => { if (!document.hidden && state.stationId) loadArrivals(); }, 20000);

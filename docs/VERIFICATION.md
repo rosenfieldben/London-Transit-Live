@@ -175,3 +175,28 @@ claim complete nationwide track/service coverage from this dataset.
 
 Final verification: 50 unit/API tests and 2 built-Worker integration tests passed,
 along with the JavaScript syntax checks and production build.
+
+
+## Automatic map framing and clarity — 20 September 2026
+
+- Service-name and map-route selection enter Focus line and fit that route. Mode and
+  visibility changes return to Network map and fit the current visible route set.
+- Camera intents allow an initial fit and a final fit as relevant routes settle.
+  Manual pointer, pan and keyboard zoom cancel pending fitting; saved cameras are
+  restored without background loads or status polls overriding them. Hidden map
+  panels defer fitting until they have a real display size.
+- Bounds use full route geometry, with station coordinates as a geometry-empty
+  fallback. Marker thinning never changes bounds or the searchable station list.
+- Added six tests covering bounds expansion/contraction, empty geometry, cancellation
+  and stale camera intents, exact repeated-edge removal, station spacing and labels.
+- Desktop preview: DLR focused at zoom 13.25; Northern at zoom 6.5. DLR-only network
+  zoom 13 expanded to 6 when Northern was shown, then returned to 13 when hidden.
+  Hiding all produced an explicit empty state. Northern displayed 28 spaced station
+  dots at national scale while its full 518-stop list remained available.
+- A manually chosen 13.5 zoom survived reload and completion of route requests,
+  including one explicitly unavailable route. Copying the view after restoration
+  reproduced the saved camera. A 390px same-origin frame check confirmed service
+  selection returns to Map with the DLR fitted and readable station labels.
+- Preview used clearly labelled demonstration boards and recorded national geometry;
+  it did not validate live National Rail credentials or complete operator coverage.
+  All temporary fixtures and the local-only iframe allowance were removed.
